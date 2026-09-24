@@ -1,0 +1,92 @@
+# The part of ~/.hermes/config.yaml that this package manages.
+#
+# install.sh merges it into your config.yaml and leaves every other key alone:
+#   model, fallback_providers, mcp_servers   replaced by the values below, adjusted per person
+#                                            (the chain starts at the first model you have a key for;
+#                                            an MCP server without a token is disabled)
+#   plugins.enabled                          mcp-ask-first is added to the list
+#
+# No secrets here: ${NAME} and key_env point at ~/.hermes/.env, which install.sh fills
+# from tokens.env.
+
+# The chain below is only the starting point. install.sh (and install.sh --adapt) replaces it
+# with a measured one: each key gets a one-token chat probe and the chain is built from the
+# prefer lists in model-preferences.yaml, because the gateway changes what each key may call
+# without notice (on 2026-09-23 glm-5.3 and deepseek-v4.1-flash were refused to the personal key
+# within hours).
+model:
+  default: glm-5.3-flash
+  provider: custom
+  base_url: https://fos-ai.fortinet.com/v1
+  api_key: ${FOS_AI_API_KEY}
+
+fallback_providers:
+  - provider: custom
+    model: glm-5.3
+    base_url: https://fos-ai.fortinet.com/v1
+    key_env: FOS_AI_FALLBACK_API_KEY
+  - provider: custom
+    model: qwen3.6-35b-a3b
+    base_url: https://releaseqa-aiserver.corp.fortinet.com/v1
+    key_env: LOCAL_QWEN_API_KEY
+  - provider: custom
+    model: qwen3.5-122b-a10b-awq
+    base_url: https://releaseqa-aiserver.corp.fortinet.com/v1
+    key_env: LOCAL_QWEN_API_KEY
+
+# Same servers and tool curation as the Log Intelligence AI Assistant (and the opencode
+# config). Tools not listed under include: are hidden from the model, and so are the MCP
+# resource/prompt helpers Hermes would add (resources/prompts: false). The write tools in
+# the include lists ask before running: plugins/mcp-ask-first.
+mcp_servers:
+  logintel:
+    url: https://releaseqa-logintelligence.corp.fortinet.com/mcp
+    headers:
+      Authorization: Bearer ${LOGINTEL_MCP_KEY}
+    tools:
+      resources: false
+      prompts: false
+  mantis-tools:
+    url: https://releaseqa-portal.corp.fortinet.com/sse
+    transport: sse
+    headers:
+      Authorization: Bearer ${MANTIS_MCP_TOKEN}
+    tools:
+      resources: false
+      prompts: false
+      include:
+        - search_bugs
+        - semantic_bug_search
+        - ask_rag
+        - mantis_fetch_activity
+        - prepare_mantis
+        - create_mantis        # asks first
+        - mantis_add_note      # asks first
+        - send_email           # asks first
+  jenkins:
+    url: https://releaseqa-stackjenkins.corp.fortinet.com/mcp-server/mcp
+    headers:
+      Authorization: Basic ${JENKINS_MCP_BASIC}
+    tools:
+      resources: false
+      prompts: false
+      include:
+        - getBuild
+        - getBuildLog
+        - getJob
+        - getJobs
+        - getQueueItem
+        - getStatus
+        - getTestResults
+        - searchBuildLog
+        - triggerBuild         # asks first
+        - rebuildBuild         # asks first
+  # OAuth, no token: install.sh turns it on once `hermes mcp login microsoft365` has stored one.
+  microsoft365:
+    url: https://microsoft365.mcp.claude.com/mcp
+    auth: oauth
+    enabled: false
+
+plugins:
+  enabled:
+    - mcp-ask-first

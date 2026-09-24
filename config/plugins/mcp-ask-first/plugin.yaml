@@ -1,0 +1,6 @@
+name: mcp-ask-first
+version: "1.0.0"
+description: "Ask before MCP tools that change shared systems: filing or updating a Mantis bug, sending email, starting or re-running a Jenkins build. Same rules as the opencode config and the Log Intelligence AI Assistant's write tools."
+author: "FortiOS QA (hermes_installer)"
+provides_hooks:
+  - pre_tool_call

@@ -1,0 +1,29 @@
+# How ./install.sh (and ./install.sh --adapt) builds the Hermes model chain.
+#
+# The fos-ai gateway and the local Qwen server change models without notice: a model can
+# disappear, become "not permitted" for a key, or run out of budget for a time block. So the
+# chain is not fixed. Each run probes every key below with a one-token chat call (a model in
+# /v1/models is not necessarily callable) and keeps, per key, the first `take` models of its
+# `prefer` list that answered. The chain is the keys in this order. Same lessons as the Log
+# Intelligence LLM automatic adapter (log-intelligence docs/implement_log/2026-09-24_llm_automatic_adapter_plan.md):
+#   - a 429 that mentions "budget" = refused for now; a plain 429 rate limit = still usable,
+#   - a model id not in any prefer list is never used, only reported as "new, not used",
+#   - a key whose gateway cannot be reached keeps its links from the current config.yaml.
+# To adopt a new model, add it to a prefer list and run ./install.sh --adapt.
+
+accounts:
+  - key: FOS_AI_API_KEY               # personal fos-ai key: primary
+    base_url: https://fos-ai.fortinet.com/v1
+    take: 1
+    prefer: [glm-5.3, glm-5.3-flash, deepseek-v4.1-flash]
+  - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
+    base_url: https://fos-ai.fortinet.com/v1
+    take: 1
+    prefer: [glm-5.3, deepseek-v4.1-flash, glm-5.3-flash]
+  - key: LOCAL_QWEN_API_KEY           # internal Qwen gateway: last resort
+    base_url: https://releaseqa-aiserver.corp.fortinet.com/v1
+    take: 2
+    prefer: [qwen3.6-35b-a3b, qwen3.5-122b-a10b-awq]
+
+# Model ids that are not chat models (vLLM answers a chat call on them anyway): never reported as new.
+not_chat_patterns: [embedding, rerank, whisper]
