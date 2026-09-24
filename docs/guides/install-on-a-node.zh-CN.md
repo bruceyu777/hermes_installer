@@ -229,6 +229,7 @@ leader 键是 `Ctrl+X`：先按它，再按字母。
 | 没有 Node.js / npm | opencode 无法走 npm 路径 | 无需处理：安装脚本会改用 opencode 官方安装脚本装到 `~/.opencode/bin`。不需要 sudo |
 | 刚装完就提示 `opencode` / `hermes` "command not found" | 安装脚本把 PATH 写进了 `~/.bashrc`；而 `~/.local/bin` 只有在登录时已存在才会被 `~/.profile` 加入 | 打开新终端，或 `source ~/.bashrc`，或直接调用 `~/.opencode/bin/opencode` / `~/.local/bin/hermes` |
 | "VS Code 扩展不在" | 你连接（22:48）时 VS Code 下载了更新的服务器，而安装发生在 22:46 | 它**在**：扩展装在共享的 `~/.vscode-server/extensions` 中，节点日志显示按 Ctrl+Escape 时 `sst-dev.opencode` 已激活。旧窗口看不到就重新加载窗口 |
+| VS Code 快捷键"不起作用" | 扩展的快捷键取决于**笔记本**的系统：Windows/Linux 上是 `Ctrl+Escape`，Mac 上是 `Cmd+Escape`；Windows 会在 VS Code 之前抢走 `Ctrl+Shift+Escape`（任务管理器） | 用正确的修饰键，或用命令面板：*Open opencode* / *Open opencode in new tab*；Hermes：*ACP: Connect to Agent*，`Ctrl+Shift+A` 打开对话面板 |
 | SSH 会话一直不返回 | 在 `ssh` 中启动 `nohup … &`，会话一直保持到安装结束 | 把后台任务的**三个**流都重定向，包括 `</dev/null` |
 | 工具被拒绝后 `opencode run` 挂住 | T7：先询问的调用被自动拒绝，然后运行一直等到我们的 180 秒超时 | 单次运行时属于预期行为；交互式会话会弹出对话框。脚本中的 `opencode run` 一定要套上 `timeout` |
 | Hermes 不会重试被拒绝的操作 | H7：拒绝之后，在同一对话中选"允许一次"也没有新的请求；模型拒绝重试 | 设计如此（拒绝信息写明"不要重试"）。要测试"允许"，请开新会话 |

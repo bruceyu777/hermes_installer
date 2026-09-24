@@ -6,21 +6,91 @@ Mantis and Log Intelligence MCP servers, curated the same way as the Log Intelli
 Assistant (and the opencode config). It works in a terminal and in VS Code.
 Clone it, add your own tokens, run one script. 简体中文: [README.zh-CN.md](README.zh-CN.md)
 
-## Quick start
+## 1. Before you start
+
+| You need | How to check |
+|---|---|
+| A Linux machine you log into (your VM, or a node) with `bash`, `curl`, `python3`, `git`, about 3 GB free | `df -h ~` |
+| Read access to this **private** repo: ask the owner to add you as a collaborator | on that machine: `ssh -T git@github.com` answers `Hi <you>!` |
+| Your tokens, at least one LLM key (see [Tokens](#tokens)) | — |
+| Optional: VS Code with Remote-SSH | — |
+
+No sudo needed: Hermes installs into your home directory.
+
+## 2. Install
 
 ```bash
+# 1. get the repo
 git clone git@github.com:bruceyu777/hermes_installer.git ~/git/hermes && cd ~/git/hermes
+
+# 2. your tokens (same names as opencode_installer: cp ~/git/opencode/tokens.env . works)
 cp tokens.env.example tokens.env && chmod 600 tokens.env
-vi tokens.env           # your own tokens; the file is git-ignored
-./install.sh --cron     # installs Hermes v0.21.4 if missing, deploys the config, checks everything,
-                        # and re-measures the models every hour
+vi tokens.env                       # fill in what you have, leave the rest empty
+
+# 3. install: 3–7 minutes the first time, nothing to answer
+./install.sh                        # add --cron on the machine you use every day (hourly model re-check);
+                                    # leave it off on shared test nodes
 ```
 
-Already use the opencode config? Its `tokens.env` has the same names: `cp ~/git/opencode/tokens.env .`
+Over a flaky SSH connection, run step 3 inside `tmux`, or detached:
+`nohup ./install.sh </dev/null > ~/hermes-install.log 2>&1 &`, then `tail -f ~/hermes-install.log`.
 
-Then run `hermes` in a terminal, or in VS Code run **Developer: Reload Window**, then
-**ACP: Connect to Agent** → Hermes Agent (Remote-SSH works). Update later with
-`git pull && ./install.sh`. Your tokens are kept.
+**4. Check it worked.** The last part of the output should look like this:
+
+```
+    logintel: Connected (1072ms)
+    mantis-tools: Connected (1115ms)
+    jenkins: Connected (1220ms)
+==> Check: plugin mcp-ask-first
+    enabled: Mantis filing/notes/email and Jenkins trigger/rebuild ask before running
+==> Check: each model of the fallback chain (gateway first, then one Hermes prompt)
+    glm-5.3-flash            gateway ok, Hermes PONG
+    …                        gateway ok, Hermes PONG
+```
+
+A `!!`, `refused` or error line: see [Troubleshooting](#troubleshooting). Then open a
+**new terminal** so `hermes` is on your `PATH`.
+
+Check again any time with `./install.sh --check`. The full acceptance suite (real calls, a few
+minutes) is `tests/acceptance.sh`. Update later with `git pull && ./install.sh`; your tokens
+are kept.
+
+## 3. Use it
+
+**In a terminal** (plain ssh, VS Code terminal, tmux). Start inside a project folder:
+
+```bash
+cd ~/git/<your-project>
+hermes                   # interactive chat   (hermes --tui = the newer full-screen UI)
+hermes -c                # continue your last session
+hermes -z "question"     # one question, print the answer, exit
+```
+
+| Key / command | Does |
+|---|---|
+| `Enter` / `Alt+Enter` or `Ctrl+J` | send / new line |
+| `Ctrl+C` | interrupt the agent (twice within 2 s: exit) |
+| `Ctrl+G` | write the prompt in your editor |
+| `/new` · `/sessions` · `/model` | new session · browse sessions · switch model |
+| `/status` · `/tools list` · `/help` | model and tokens · tools the agent has · all commands |
+| `/quit` or `Ctrl+D` | exit |
+
+**In VS Code:** connect with Remote-SSH, run **Developer: Reload Window** once after the install,
+then **ACP: Connect to Agent** → *Hermes Agent* (command palette). **Ctrl+Shift+A**
+(**Cmd+Shift+A** on a Mac) opens the chat panel; **Esc** cancels the current turn. Approval
+requests appear in the panel. After a config change: **ACP: Restart Agent**.
+
+**Try:**
+- *"What failed in the latest FortiOS build? Group the failures by root cause."* (Log Intelligence)
+- *"Search Mantis for bugs about 'ipsec tunnel flap after upgrade' and summarise the top 3."*
+- *"Get the build log of Jenkins job X #1234 and explain why it failed."*
+
+**Good to know:**
+- Filing a Mantis bug or note, sending email, and triggering a Jenkins build **ask you first**:
+  allow once / allow for this session / always / deny. Prefer "once" or "session". In
+  `hermes -z` nobody can answer, so they are blocked: do those in the chat.
+- If a model fails, the same message goes to the next one automatically.
+- More: all keys and commands, tmux, tips and traps in [docs/guides/install-on-a-node.md](docs/guides/install-on-a-node.md) §4–6.
 
 ## What the config gives you
 

@@ -5,20 +5,87 @@
 工具筛选与 Log Intelligence AI Assistant（以及 opencode 配置）一致。终端和 VS Code 都能用。
 克隆、填入自己的 token、运行一个脚本即可。English: [README.md](README.md)
 
-## 快速开始
+## 1. 开始之前
+
+| 需要 | 检查方式 |
+|---|---|
+| 一台你能登录的 Linux 机器（你的虚拟机或测试节点），有 `bash`、`curl`、`python3`、`git`，约 3 GB 空闲空间 | `df -h ~` |
+| 本**私有**仓库的读取权限：请仓库所有者把你加为协作者 | 在该机器上：`ssh -T git@github.com` 回答 `Hi <you>!` |
+| 你的 token，至少一个 LLM 密钥（见 [Token](#token)） | — |
+| 可选：带 Remote-SSH 的 VS Code | — |
+
+不需要 sudo：Hermes 安装在你的主目录中。
+
+## 2. 安装
 
 ```bash
+# 1. 获取仓库
 git clone git@github.com:bruceyu777/hermes_installer.git ~/git/hermes && cd ~/git/hermes
+
+# 2. 你的 token（与 opencode_installer 的变量名相同：可以 cp ~/git/opencode/tokens.env .）
 cp tokens.env.example tokens.env && chmod 600 tokens.env
-vi tokens.env           # 填入自己的 token；该文件不会进 git
-./install.sh --cron     # 缺少时安装 Hermes v0.21.4，部署配置，全部检查一遍，并每小时重新测量模型
+vi tokens.env                       # 填写你有的，其余留空
+
+# 3. 安装：首次 3–7 分钟，无需回答任何问题
+./install.sh                        # 在你每天使用的机器上加 --cron（每小时重新检查模型）；
+                                    # 共享测试节点上不要加
 ```
 
-已经在用 opencode 配置？它的 `tokens.env` 变量名相同：`cp ~/git/opencode/tokens.env .`
+SSH 连接不稳定时，在 `tmux` 中运行第 3 步，或以分离方式运行：
+`nohup ./install.sh </dev/null > ~/hermes-install.log 2>&1 &`，然后 `tail -f ~/hermes-install.log`。
 
-之后在终端运行 `hermes`；或在 VS Code 中执行 **Developer: Reload Window**，再执行
-**ACP: Connect to Agent** → Hermes Agent（Remote-SSH 同样可用）。以后更新：
-`git pull && ./install.sh`，token 会保留。
+**4. 确认安装成功。** 输出的最后部分应该是这样：
+
+```
+    logintel: Connected (1072ms)
+    mantis-tools: Connected (1115ms)
+    jenkins: Connected (1220ms)
+==> Check: plugin mcp-ask-first
+    enabled: Mantis filing/notes/email and Jenkins trigger/rebuild ask before running
+==> Check: each model of the fallback chain (gateway first, then one Hermes prompt)
+    glm-5.3-flash            gateway ok, Hermes PONG
+    …                        gateway ok, Hermes PONG
+```
+
+出现 `!!`、`refused` 或错误：见 [故障排查](#故障排查)。然后打开一个**新终端**，让 `hermes` 进入 `PATH`。
+
+随时可用 `./install.sh --check` 再次检查。完整验收测试（真实调用，需要几分钟）是 `tests/acceptance.sh`。
+以后更新：`git pull && ./install.sh`，token 会保留。
+
+## 3. 使用
+
+**在终端中**（直接 ssh、VS Code 终端、tmux）。在项目文件夹中启动：
+
+```bash
+cd ~/git/<你的项目>
+hermes                   # 交互式对话   （hermes --tui = 新的全屏界面）
+hermes -c                # 继续上一次会话
+hermes -z "问题"          # 问一个问题，打印回答后退出
+```
+
+| 按键 / 命令 | 作用 |
+|---|---|
+| `Enter` / `Alt+Enter` 或 `Ctrl+J` | 发送 / 换行 |
+| `Ctrl+C` | 打断 agent（2 秒内按两次：退出） |
+| `Ctrl+G` | 在编辑器中编写提示 |
+| `/new` · `/sessions` · `/model` | 新会话 · 浏览会话 · 切换模型 |
+| `/status` · `/tools list` · `/help` | 模型和 token · agent 拥有的工具 · 所有命令 |
+| `/quit` 或 `Ctrl+D` | 退出 |
+
+**在 VS Code 中：** 用 Remote-SSH 连接，安装后执行一次 **Developer: Reload Window**，
+然后在命令面板中执行 **ACP: Connect to Agent** → *Hermes Agent*。**Ctrl+Shift+A**（Mac 上是 **Cmd+Shift+A**）
+打开对话面板；**Esc** 取消当前这一轮。审批请求会显示在面板中。修改配置后：**ACP: Restart Agent**。
+
+**试试：**
+- *"最新的 FortiOS 构建中哪些用例失败了？按根因分组。"*（Log Intelligence）
+- *"在 Mantis 中搜索关于 'ipsec tunnel flap after upgrade' 的 bug，总结前 3 个。"*
+- *"获取 Jenkins 任务 X #1234 的构建日志，解释失败原因。"*
+
+**需要知道：**
+- 提交 Mantis bug 或备注、发邮件、触发 Jenkins 构建都会**先询问你**：允许一次 / 本会话内允许 / 永久 / 拒绝。
+  建议选"一次"或"本会话"。在 `hermes -z` 中无人应答，所以会被拦截：这些操作请在对话中进行。
+- 某个模型失败时，同一条消息会自动发给下一个模型。
+- 更多内容：全部快捷键和命令、tmux、技巧与陷阱，见 [docs/guides/install-on-a-node.zh-CN.md](docs/guides/install-on-a-node.zh-CN.md) 第 4–6 节。
 
 ## 配置内容
 
