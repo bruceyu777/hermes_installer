@@ -31,6 +31,8 @@ pointer, not deleted. New docs come from `docs/templates/`.
 | [guides/model-fallback.zh-CN.md](guides/model-fallback.zh-CN.md) | guide | 2026-09-21 | 2026-09-21 | current | same content in Simplified Chinese |
 | [guides/fosqa-vm-llm-chain.md](guides/fosqa-vm-llm-chain.md) | guide | 2026-09-22 | 2026-09-23 | current | fosqa VM: update of the May checkout to v0.21.4, keys in `~/.hermes/.env`, three-tier chain; §7 (2026-09-23): MCP servers with the AI Assistant's curation, `mcp-ask-first` plugin, per-key measured model chain with hourly `--adapt`, the `hermes_installer` repo and its tests (English) |
 | [guides/fosqa-vm-llm-chain.zh-CN.md](guides/fosqa-vm-llm-chain.zh-CN.md) | guide | 2026-09-22 | 2026-09-23 | current | same content in Simplified Chinese |
+| [guides/install-on-a-node.md](guides/install-on-a-node.md) | guide | 2026-09-23 | 2026-09-23 | current | installing opencode and Hermes on another machine (node16, no human input): commands, output, acceptance tests (`tests/acceptance.sh`), shell-terminal usage with keys and slash commands, tips, traps, removal. Same file in both installer repos (English) |
+| [guides/install-on-a-node.zh-CN.md](guides/install-on-a-node.zh-CN.md) | guide | 2026-09-23 | 2026-09-23 | current | same content in Simplified Chinese |
 | [templates/guide.md](templates/guide.md) | template | 2026-09-17 | 2026-09-17 | current | template for guides (copied from the opencode project) |
 
 ## History
@@ -40,3 +42,4 @@ pointer, not deleted. New docs come from `docs/templates/`.
 | 2026-09-21 | Created with the install, VS Code ACP and model-fallback guides in English and Chinese. |
 | 2026-09-22 | Added the fosqa-VM guide (v0.21.4 update + three-tier fos-ai/Qwen chain) in English and Chinese; pointer rows added to the install and model-fallback guides; VS Code ACP guides gained the Remote-SSH row for the fosqa VM. |
 | 2026-09-23 | Made the folder the shareable `hermes_installer` repo: `install.sh` (install, tokens, config merge, plugin, VS Code, measured model chain, `--adapt`/`--cron`, check), `tokens.env.example`, `config/`, `scripts/`, `README.md` / `README.zh-CN.md` rewritten as config summary + quick start. fosqa-VM guides gained §7 in both languages. |
+| 2026-09-23 (night) | Added `guides/install-on-a-node.md` (+ zh-CN): node16 install of both agents, acceptance tests, shell-terminal usage, tips and traps; `tests/acceptance.sh`. |

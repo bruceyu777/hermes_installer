@@ -106,6 +106,7 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 
 | 文档 | English | 简体中文 |
 |---|---|---|
+| 在另一台机器上安装（node16）：步骤、测试、终端用法、技巧与陷阱 | [docs/guides/install-on-a-node.md](docs/guides/install-on-a-node.md) | [docs/guides/install-on-a-node.zh-CN.md](docs/guides/install-on-a-node.zh-CN.md) |
 | 本虚拟机：v0.21.4、LLM 链、MCP 服务器、自动适配 | [docs/guides/fosqa-vm-llm-chain.md](docs/guides/fosqa-vm-llm-chain.md) | [docs/guides/fosqa-vm-llm-chain.zh-CN.md](docs/guides/fosqa-vm-llm-chain.zh-CN.md) |
 | 安装、更新、回滚 Hermes | [docs/guides/install-hermes.md](docs/guides/install-hermes.md) | [docs/guides/install-hermes.zh-CN.md](docs/guides/install-hermes.zh-CN.md) |
 | VS Code：ACP Client 扩展 | [docs/guides/vscode-acp.md](docs/guides/vscode-acp.md) | [docs/guides/vscode-acp.zh-CN.md](docs/guides/vscode-acp.zh-CN.md) |
