@@ -43,3 +43,4 @@ pointer, not deleted. New docs come from `docs/templates/`.
 | 2026-09-22 | Added the fosqa-VM guide (v0.21.4 update + three-tier fos-ai/Qwen chain) in English and Chinese; pointer rows added to the install and model-fallback guides; VS Code ACP guides gained the Remote-SSH row for the fosqa VM. |
 | 2026-09-23 | Made the folder the shareable `hermes_installer` repo: `install.sh` (install, tokens, config merge, plugin, VS Code, measured model chain, `--adapt`/`--cron`, check), `tokens.env.example`, `config/`, `scripts/`, `README.md` / `README.zh-CN.md` rewritten as config summary + quick start. fosqa-VM guides gained §7 in both languages. |
 | 2026-09-23 (night) | Added `guides/install-on-a-node.md` (+ zh-CN): node16 install of both agents, acceptance tests, shell-terminal usage, tips and traps; `tests/acceptance.sh`. |
+| 2026-09-23 (night) | `install-on-a-node` guide: node15 results, sudo and disk traps. |

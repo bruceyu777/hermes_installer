@@ -1,10 +1,10 @@
 ---
-title: 在另一台机器上安装 opencode 和 Hermes —— node16 实录、技巧与陷阱
+title: 在另一台机器上安装 opencode 和 Hermes —— node16 与 node15 实录、技巧与陷阱
 kind: guide
 created: 2026-09-23
 updated: 2026-09-23
 status: current
-verified_against: all-in-one-node16（10.96.234.11），Ubuntu 24.04 LTS，内核 6.8.0-60；opencode 1.18.32（安装仓库 59bc42a），Hermes Agent v0.21.4（安装仓库 534f426）；2026-09-23 22:45–23:05 PDT 实际运行
+verified_against: all-in-one-node16（10.96.234.11）和 all-in-one-node15（10.96.234.98），Ubuntu 24.04 LTS，内核 6.8.0-60；opencode 1.18.32（安装仓库 59bc42a），Hermes Agent v0.21.4（安装仓库 534f426）；2026-09-23 22:45–23:05 PDT 实际运行
 summary: 两个 agent 第一次安装到 fosqa 虚拟机以外的机器上，全程无人工输入：准确的命令、每一步的输出、验收测试（opencode T1–T8、Hermes H1–H9）、在 shell 终端中的用法，以及遇到的每一个陷阱。两个安装仓库中是同一份文件。
 related:
   - ../INDEX.md
@@ -102,6 +102,27 @@ cd ~/git/hermes   && tests/acceptance.sh
 | H7 | 通过 ACP 调用 `triggerBuild`（`tests/acp_permission_test.py`） | 一个权限请求 `start a Jenkins build: {"jobFullName": …}`，回答 deny → 没有运行 |
 | H8 | VS Code 条目和扩展 | `/home/fosqa/.local/bin/hermes ['acp']`、`formulahendry.acp-client-0.2.0` |
 | H9 | `tokens.env` | 已被 git 忽略 |
+
+### node15：第二个节点（同一天，按新版 README 操作）
+
+node15（`all-in-one-node15`，`10.96.234.98`）的起点与 node16 相同：Ubuntu 24.04，没有 Node.js，没有 agent，
+有 VS Code 服务器和 GitHub 访问权限。完全按照 README 的步骤安装（预检查、克隆两个仓库、复制 `tokens.env`、
+在一个分离的后台任务中先后运行 `./install.sh </dev/null`），然后在两个克隆中分别运行 `tests/acceptance.sh`。
+
+| | opencode | Hermes |
+|---|---|---|
+| 安装 | 47.8 秒，exit 0 | 231.3 秒，exit 0 |
+| 模型链 | 与 node16 和 fosqa 虚拟机相同 | 相同 |
+| 验收测试 | T1–T8 通过 | H1–H9 通过 |
+
+与 node16 的不同：
+- **免密码 sudo。** node15 有，所以 Hermes 官方安装脚本运行 `apt` 安装了 `ripgrep`（node16 上已经有了）。
+  无需处理；只需知道安装脚本在可以用 sudo 时会用它。
+- **H7 的"允许一次"得到了执行。** 在 ACP 测试中，模型在"拒绝"之后再次请求，"允许一次"放行了调用：
+  Jenkins 对这个虚构的任务回答 `no results were found`，所以没有启动构建。这是第一次在节点上完整走通
+  "允许"路径（模型在被拒绝后并不总会再次请求；在 node16 上就没有）。
+- **磁盘：** 安装前剩余 20 GB，安装后 17 GB（已用 92%）。两个 agent 共占约 2.7 GB
+  （`~/.hermes` 2.1 GB、uv 缓存 0.3 GB、`~/.opencode` 0.2 GB）。
 
 ## 4. 在 shell 终端中使用
 
@@ -237,6 +258,8 @@ leader 键是 `Ctrl+X`：先按它，再按字母。
 | 共享节点上的 token | 任何能以 `fosqa` 登录的人都能读取 `~/.config/opencode/*.key` 和 `~/.hermes/.env` | 使用你自己的节点，或用完后移除 agent。安装完成后仓库里的 `tokens.env` 就不再需要了：`shred -u tokens.env`（重跑会保留已安装的密钥） |
 | 测试节点上的每小时 cron | `--cron` 会添加一个使用你密钥的每小时任务 | node16 **没有**加 cron。只在你每天工作的机器上添加：`./install.sh --no-install --no-check --cron` |
 | VS Code Machine 设置被修改 | 两个安装脚本都会修改 `~/.vscode-server/data/Machine/settings.json`（关闭 Python 自动激活、`acp.agents`） | 会先写一份 `.bak-<时间>` 备份；这个修改会影响节点上以该用户使用 VS Code 的所有人 |
+| Hermes 安装脚本会运行 `sudo apt` | 在 node15（免密码 sudo）上它安装了 `ripgrep`；node16 上没有缺少的软件包 | 符合预期且无害；没有 sudo 时会跳过这一步。在共享节点上要知道它可能改动系统软件包 |
+| 测试节点磁盘不足 | node15 的剩余空间从 20 GB 降到 17 GB（已用 92%） | 先检查 `df -h ~`；两个 agent 共需约 3 GB |
 | Microsoft 365 显示 ⚠ / 禁用 | OAuth 需要浏览器 | 符合预期；可选且未测试 |
 
 ## 7. 卸载
@@ -257,3 +280,4 @@ crontab -l | grep -v 'install.sh --adapt' | crontab -     # 仅当你加过 --cr
 | Date | Change |
 |---|---|
 | 2026-09-23 | 在 node16 上首次安装两个 agent 后创建：命令、输出、验收测试 T1–T8 / H1–H9（`tests/acceptance.sh`）、在 shell 终端中使用两个 agent（命令、快捷键、斜杠命令）、技巧、陷阱、卸载。 |
+| 2026-09-23（深夜） | 按新版 README 安装 node15：结果表、免密码 sudo 与磁盘不足两个陷阱、第一次在节点上完整走通 ACP 允许路径。 |

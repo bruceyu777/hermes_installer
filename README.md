@@ -15,7 +15,9 @@ Clone it, add your own tokens, run one script. 简体中文: [README.zh-CN.md](R
 | Your tokens, at least one LLM key (see [Tokens](#tokens)) | — |
 | Optional: VS Code with Remote-SSH | — |
 
-No sudo needed: Hermes installs into your home directory.
+Hermes installs into your home directory and does not need sudo. If you **do** have passwordless
+sudo, Hermes's official installer uses it to add missing system packages (on node15 it ran
+`apt` to install `ripgrep`); without sudo it just skips them.
 
 ## 2. Install
 
@@ -183,7 +185,7 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 
 | Doc | English | 简体中文 |
 |---|---|---|
-| Install on another machine (node16): steps, tests, terminal use, tips and traps | [docs/guides/install-on-a-node.md](docs/guides/install-on-a-node.md) | [docs/guides/install-on-a-node.zh-CN.md](docs/guides/install-on-a-node.zh-CN.md) |
+| Install on another machine (node16, node15): steps, tests, terminal use, tips and traps | [docs/guides/install-on-a-node.md](docs/guides/install-on-a-node.md) | [docs/guides/install-on-a-node.zh-CN.md](docs/guides/install-on-a-node.zh-CN.md) |
 | This VM: v0.21.4, LLM chain, MCP servers, adapter | [docs/guides/fosqa-vm-llm-chain.md](docs/guides/fosqa-vm-llm-chain.md) | [docs/guides/fosqa-vm-llm-chain.zh-CN.md](docs/guides/fosqa-vm-llm-chain.zh-CN.md) |
 | Install, update, roll back Hermes | [docs/guides/install-hermes.md](docs/guides/install-hermes.md) | [docs/guides/install-hermes.zh-CN.md](docs/guides/install-hermes.zh-CN.md) |
 | VS Code: ACP Client extension | [docs/guides/vscode-acp.md](docs/guides/vscode-acp.md) | [docs/guides/vscode-acp.zh-CN.md](docs/guides/vscode-acp.zh-CN.md) |

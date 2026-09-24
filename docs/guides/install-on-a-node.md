@@ -1,10 +1,10 @@
 ---
-title: Installing opencode and Hermes on another machine — node16 walk-through, tips and traps
+title: Installing opencode and Hermes on another machine — node16 and node15 walk-through, tips and traps
 kind: guide
 created: 2026-09-23
 updated: 2026-09-23
 status: current
-verified_against: all-in-one-node16 (10.96.234.11), Ubuntu 24.04 LTS, kernel 6.8.0-60; opencode 1.18.32 (installer 59bc42a), Hermes Agent v0.21.4 (installer 534f426); runs on 2026-09-23 22:45–23:05 PDT
+verified_against: all-in-one-node16 (10.96.234.11) and all-in-one-node15 (10.96.234.98), Ubuntu 24.04 LTS, kernel 6.8.0-60; opencode 1.18.32 (installer 59bc42a), Hermes Agent v0.21.4 (installer 534f426); runs on 2026-09-23 22:45–23:05 PDT
 summary: The first install of both agents on a machine other than the fosqa VM, done without any human input, with the exact commands, what each step printed, the acceptance tests (T1–T8 for opencode, H1–H9 for Hermes) and every trap we hit. The same file is in both installer repos.
 related:
   - ../INDEX.md
@@ -103,6 +103,29 @@ that does not exist (`…-gate-demo-does-not-exist`), so even a broken gate coul
 | H7 | `triggerBuild` through ACP (`tests/acp_permission_test.py`) | one permission request `start a Jenkins build: {"jobFullName": …}`, answered deny → not run |
 | H8 | VS Code entry and extension | `/home/fosqa/.local/bin/hermes ['acp']`, `formulahendry.acp-client-0.2.0` |
 | H9 | `tokens.env` | git-ignored |
+
+### node15: the second node (same day, from the new README)
+
+node15 (`all-in-one-node15`, `10.96.234.98`) had the same starting point as node16: Ubuntu 24.04,
+no Node.js, no agents, VS Code server, GitHub access. It was installed by following the README
+steps exactly (pre-check, clone both repos, copy `tokens.env`, `./install.sh </dev/null`, one after
+the other in a detached job), then `tests/acceptance.sh` in each clone.
+
+| | opencode | Hermes |
+|---|---|---|
+| Install | 47.8 s, exit 0 | 231.3 s, exit 0 |
+| Chain | the same as node16 and the fosqa VM | the same |
+| Acceptance tests | T1–T8 pass | H1–H9 pass |
+
+Differences from node16:
+- **Passwordless sudo.** node15 has it, so Hermes's official installer ran `apt` and installed
+  `ripgrep` (node16 already had it). Nothing to do; just know the installer will use sudo when it can.
+- **H7 "allow once" was answered.** In the ACP test the model asked again after "deny" and "allow
+  once" let the call through: Jenkins answered `no results were found` for the made-up job, so no
+  build started. This is the first full allow path on a node (the model doesn't always ask again
+  after a denial; on node16 it didn't).
+- **Disk:** 20 GB free before, 17 GB after (92% used). Both agents take about 2.7 GB
+  (`~/.hermes` 2.1 GB, uv cache 0.3 GB, `~/.opencode` 0.2 GB).
 
 ## 4. Use them from a shell terminal
 
@@ -241,6 +264,8 @@ Prefer "once" or "session"; "always" is permanent.
 | Tokens on a shared node | anyone who can log in as `fosqa` can read `~/.config/opencode/*.key` and `~/.hermes/.env` | use a node you own, or remove the agents when you're done. After the install, `tokens.env` in the repo is no longer needed: `shred -u tokens.env` (a re-run keeps the installed keys) |
 | Hourly cron on a test node | `--cron` adds an hourly job that uses your keys | node16 got **no** cron. Add it only where you work every day: `./install.sh --no-install --no-check --cron` |
 | VS Code Machine settings changed | both installers edit `~/.vscode-server/data/Machine/settings.json` (Python auto-activation off, `acp.agents`) | a `.bak-<time>` copy is written first; the change affects everyone who uses VS Code as that user on the node |
+| Hermes's installer runs `sudo apt` | on node15 (passwordless sudo) it installed `ripgrep`; on node16 nothing was missing | expected and harmless; without sudo the step is skipped. On shared nodes, know that it can change system packages |
+| Low disk on test nodes | node15 went from 20 GB to 17 GB free (92% used) | check `df -h ~` first; both agents need about 3 GB |
 | Microsoft 365 shows ⚠ / disabled | OAuth needs a browser | expected; optional and untested |
 
 ## 7. Removing it again
@@ -261,3 +286,4 @@ crontab -l | grep -v 'install.sh --adapt' | crontab -     # only if you added --
 | Date | Change |
 |---|---|
 | 2026-09-23 | Created after the first install of both agents on node16: commands, output, acceptance tests T1–T8 / H1–H9 (`tests/acceptance.sh`), using both agents from a shell terminal (commands, keys, slash commands), tips, traps, removal. |
+| 2026-09-23 (night) | node15 installed from the new README: results table, passwordless-sudo and low-disk traps, first full ACP allow path on a node. |

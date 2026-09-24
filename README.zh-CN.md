@@ -14,7 +14,8 @@
 | 你的 token，至少一个 LLM 密钥（见 [Token](#token)） | — |
 | 可选：带 Remote-SSH 的 VS Code | — |
 
-不需要 sudo：Hermes 安装在你的主目录中。
+Hermes 安装在你的主目录中，不需要 sudo。如果你**有**免密码 sudo，Hermes 官方安装脚本会用它安装缺少的系统软件包
+（在 node15 上它运行 `apt` 安装了 `ripgrep`）；没有 sudo 时会直接跳过。
 
 ## 2. 安装
 
@@ -173,7 +174,7 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 
 | 文档 | English | 简体中文 |
 |---|---|---|
-| 在另一台机器上安装（node16）：步骤、测试、终端用法、技巧与陷阱 | [docs/guides/install-on-a-node.md](docs/guides/install-on-a-node.md) | [docs/guides/install-on-a-node.zh-CN.md](docs/guides/install-on-a-node.zh-CN.md) |
+| 在另一台机器上安装（node16、node15）：步骤、测试、终端用法、技巧与陷阱 | [docs/guides/install-on-a-node.md](docs/guides/install-on-a-node.md) | [docs/guides/install-on-a-node.zh-CN.md](docs/guides/install-on-a-node.zh-CN.md) |
 | 本虚拟机：v0.21.4、LLM 链、MCP 服务器、自动适配 | [docs/guides/fosqa-vm-llm-chain.md](docs/guides/fosqa-vm-llm-chain.md) | [docs/guides/fosqa-vm-llm-chain.zh-CN.md](docs/guides/fosqa-vm-llm-chain.zh-CN.md) |
 | 安装、更新、回滚 Hermes | [docs/guides/install-hermes.md](docs/guides/install-hermes.md) | [docs/guides/install-hermes.zh-CN.md](docs/guides/install-hermes.zh-CN.md) |
 | VS Code：ACP Client 扩展 | [docs/guides/vscode-acp.md](docs/guides/vscode-acp.md) | [docs/guides/vscode-acp.zh-CN.md](docs/guides/vscode-acp.zh-CN.md) |
