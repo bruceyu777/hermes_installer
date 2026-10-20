@@ -13,9 +13,11 @@
 # with a measured one: each key gets a one-token chat probe and the chain is built from the
 # prefer lists in model-preferences.yaml, because the gateway changes what each key may call
 # without notice (on 2026-09-23 glm-5.3 and deepseek-v4.1-flash were refused to the personal key
-# within hours).
+# within hours; on 2026-10-19 deepseek-v4.1-flash came back and became the preferred model).
+# Fallback 1 is glm-5.3 on purpose: Hermes drops a fallback whose base URL and model both
+# match an earlier link, so the second key must not repeat the primary's model.
 model:
-  default: glm-5.3-flash
+  default: deepseek-v4.1-flash
   provider: custom
   base_url: https://fos-ai.fortinet.com/v1
   api_key: ${FOS_AI_API_KEY}
@@ -81,6 +83,15 @@ mcp_servers:
         - searchBuildLog
         - triggerBuild         # asks first
         - rebuildBuild         # asks first
+  # Image server (releaseqa-imageserver): build sync status, image paths, latest / GA build,
+  # release tags. All 14 tools are read-only, so every tool is exposed and none asks first.
+  image-builds:
+    url: http://releaseqa-imageserver.corp.fortinet.com:8091/mcp
+    headers:
+      Authorization: Bearer ${IMAGE_SERVER_MCP_API_KEY}
+    tools:
+      resources: false
+      prompts: false
   # OAuth, no token: install.sh turns it on once `hermes mcp login microsoft365` has stored one.
   microsoft365:
     url: https://microsoft365.mcp.claude.com/mcp
@@ -90,3 +101,4 @@ mcp_servers:
 plugins:
   enabled:
     - mcp-ask-first
+    - chain-adapt        # re-measure the model chain on a permanent refusal; chain notice at session start

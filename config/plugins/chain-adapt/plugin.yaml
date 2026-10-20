@@ -1,0 +1,7 @@
+name: chain-adapt
+version: "1.0.0"
+description: "Re-measure the model chain at once when the gateway refuses a model for good (401/403/404, 'does not permit', 'unknown model'), and print the measured chain and the new models seen once per change at session start. Same rules as the opencode chain-fallback plugin and the Log Intelligence model watch."
+author: "FortiOS QA (hermes_installer)"
+provides_hooks:
+  - api_request_error
+  - on_session_start

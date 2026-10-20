@@ -38,12 +38,14 @@ ENV_NAME_OF_TOKEN = {
     "MANTIS_MCP_TOKEN": "MANTIS_MCP_TOKEN",
     "JENKINS_MCP_TOKEN": "JENKINS_MCP_BASIC",
     "LOGINTEL_MCP_KEY": "LOGINTEL_MCP_KEY",
+    "IMAGE_SERVER_MCP_API_KEY": "IMAGE_SERVER_MCP_API_KEY",
 }
 ENV_BLOCK_HEADER = "# ── hermes_installer tokens (written by install.sh from tokens.env) ──"
 
 # MCP server -> the .env name its Authorization header needs. OAuth servers are on when
 # `hermes mcp login <server>` has stored a token under mcp-tokens/.
-TOKEN_OF_MCP_SERVER = {"logintel": "LOGINTEL_MCP_KEY", "mantis-tools": "MANTIS_MCP_TOKEN", "jenkins": "JENKINS_MCP_BASIC"}
+TOKEN_OF_MCP_SERVER = {"logintel": "LOGINTEL_MCP_KEY", "mantis-tools": "MANTIS_MCP_TOKEN", "jenkins": "JENKINS_MCP_BASIC",
+                       "image-builds": "IMAGE_SERVER_MCP_API_KEY"}
 OAUTH_MCP_SERVERS = ("microsoft365",)
 ENV_REFERENCE = re.compile(r"^\$\{(\w+)\}$")
 
@@ -246,13 +248,18 @@ def probe_model(base_url, key, model):
     return "refused", f"HTTP {status}: {reason}"
 
 
-def adapt_chain(preferences_path, fragment, config, env):
+def adapt_chain(preferences_path, fragment, config, env, details=None):
+    """The measured chain. ``details`` (a dict) receives what the plugin chain-adapt and the
+    status file show: refused models with reasons and new models per key."""
     with open(preferences_path, encoding="utf-8") as preferences_file:
         preferences = round_trip_yaml().load(preferences_file)
     known = {model for account in preferences["accounts"] for model in account["prefer"]}
     not_chat = [pattern.lower() for pattern in preferences.get("not_chat_patterns") or []]
     current = chain_in_config(config)
     chosen, used = [], set()
+    details = details if details is not None else {}
+    details.setdefault("refused", {})
+    details.setdefault("new_models", {})
     for account in preferences["accounts"]:
         key_name, base_url, take = account["key"], account["base_url"], int(account.get("take", 1))
         if not has_value(env, key_name):
@@ -278,9 +285,12 @@ def adapt_chain(preferences_path, fragment, config, env):
             if result == "ok":
                 picks.append({"model": model, "base_url": base_url, "token": key_name, "extra": {}})
                 used.add((base_url, model))
+            elif result == "refused":
+                details["refused"][f"{key_name}/{model}"] = reason
         new_models = [model for model in listed if model not in known
                       and not any(pattern in model.lower() for pattern in not_chat)]
         if new_models:
+            details["new_models"][key_name] = new_models
             print(f"    {key_name}: new models seen, not used until added to a prefer list: {', '.join(new_models)}")
         if not picks:
             print(f"    !! {key_name}: none of its preferred models answers right now")
@@ -301,8 +311,9 @@ def merge_config(fragment_path, hermes_home, preferences_path=None, dry_run=Fals
     config = load_config(hermes_home)
     env = read_env_file(os.path.join(hermes_home, ".env"))
 
+    details = {}
     if preferences_path:
-        available = adapt_chain(preferences_path, fragment, config, env)
+        available = adapt_chain(preferences_path, fragment, config, env, details)
     else:   # the fixed chain of the fragment, cut down to the links this person has a key for
         chain = model_chain(fragment)
         available = [link for link in chain if has_value(env, link["token"])]
@@ -364,6 +375,42 @@ def merge_config(fragment_path, hermes_home, preferences_path=None, dry_run=Fals
     print("    MCP: " + ", ".join(f"{name}={'on' if servers[name].get('enabled', True) else 'off'}"
                                   for name in fragment["mcp_servers"]))
     print(f"    plugins enabled: {', '.join(str(name) for name in enabled)}")
+    write_status(hermes_home, available, details)
+
+
+def write_status(hermes_home, chain, details):
+    """HERMES_HOME/adapt-status.json: the measured chain, what was refused, the new models
+    nobody adopted, and the command that re-measures — read by the plugin chain-adapt (a
+    permanent refusal runs the command at once; a session start prints the chain once per
+    change). ``changed_at`` moves only when the chain or the new models differ from the last
+    status, so the notice appears once per real change, not per run."""
+    status_path = os.path.join(hermes_home, "adapt-status.json")
+    previous = {}
+    if os.path.exists(status_path):
+        try:
+            with open(status_path, encoding="utf-8") as handle:
+                previous = json.load(handle)
+        except ValueError:
+            previous = {}
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    chain_links = [{"model": link["model"], "base_url": link["base_url"], "token": link["token"]} for link in chain]
+    new_models = details.get("new_models") or {}
+    unchanged = previous.get("chain") == chain_links and previous.get("new_models") == new_models
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    status = {
+        "_comment": "written by install.sh / install.sh --adapt (scripts/merge_into_hermes_home.py); read by the plugin chain-adapt",
+        "measured_at": now,
+        "changed_at": previous.get("changed_at", now) if unchanged else now,
+        "chain": chain_links,
+        "refused": details.get("refused") or {},
+        "new_models": new_models,
+        "adapt_command": [os.path.join(repo_dir, "install.sh"), "--adapt"],
+        "adopt_hint": "add a new model to its key's prefer list in config/model-preferences.yaml, then run install.sh --adapt",
+    }
+    with open(status_path + ".tmp", "w", encoding="utf-8") as handle:
+        json.dump(status, handle, indent=2)
+        handle.write("\n")
+    os.replace(status_path + ".tmp", status_path)
 
 
 def main():

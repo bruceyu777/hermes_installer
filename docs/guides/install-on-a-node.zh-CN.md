@@ -256,7 +256,7 @@ leader 键是 `Ctrl+X`：先按它，再按字母。
 | Hermes 不会重试被拒绝的操作 | H7：拒绝之后，在同一对话中选"允许一次"也没有新的请求；模型拒绝重试 | 设计如此（拒绝信息写明"不要重试"）。要测试"允许"，请开新会话 |
 | Hermes `-z` 自动批准一切 | `hermes -z` 设置了 `HERMES_YOLO_MODE=1` | `mcp-ask-first` 插件会在 `-z`、`chat -q` 和 cron 中拦截写操作工具。需要审批的事不要用 `-z` |
 | 共享节点上的 token | 任何能以 `fosqa` 登录的人都能读取 `~/.config/opencode/*.key` 和 `~/.hermes/.env` | 使用你自己的节点，或用完后移除 agent。安装完成后仓库里的 `tokens.env` 就不再需要了：`shred -u tokens.env`（重跑会保留已安装的密钥） |
-| 测试节点上的每小时 cron | `--cron` 会添加一个使用你密钥的每小时任务 | node16 **没有**加 cron。只在你每天工作的机器上添加：`./install.sh --no-install --no-check --cron` |
+| 测试节点上的 cron | `--cron` 会添加一个使用你密钥的任务，每 15 分钟一次（2026-10-19 前是每小时） | node16 **没有**加 cron。只在你每天工作的机器上添加：`./install.sh --no-install --no-check --cron` |
 | VS Code Machine 设置被修改 | 两个安装脚本都会修改 `~/.vscode-server/data/Machine/settings.json`（关闭 Python 自动激活、`acp.agents`） | 会先写一份 `.bak-<时间>` 备份；这个修改会影响节点上以该用户使用 VS Code 的所有人 |
 | Hermes 安装脚本会运行 `sudo apt` | 在 node15（免密码 sudo）上它安装了 `ripgrep`；node16 上没有缺少的软件包 | 符合预期且无害；没有 sudo 时会跳过这一步。在共享节点上要知道它可能改动系统软件包 |
 | 测试节点磁盘不足 | node15 的剩余空间从 20 GB 降到 17 GB（已用 92%） | 先检查 `df -h ~`；两个 agent 共需约 3 GB |

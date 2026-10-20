@@ -14,7 +14,7 @@
 #   --no-check      skip the verification at the end
 #   --check         only run the verification
 #   --adapt         only probe the models and update the chain in config.yaml
-#   --cron          also add an hourly `install.sh --adapt` to your crontab (idempotent)
+#   --cron          also put `install.sh --adapt` in your crontab every 15 min (idempotent; with --adapt: only that)
 #
 # Works on $HERMES_HOME (default ~/.hermes). Safe to re-run after every `git pull`:
 # tokens already in $HERMES_HOME/.env are kept unless tokens.env gives a new value.
@@ -47,7 +47,7 @@ export PATH="$HOME/.local/bin:$PATH"
 HELPER="$REPO_DIR/scripts/merge_into_hermes_home.py"
 FRAGMENT="$REPO_DIR/config/config.yaml"
 PREFERENCES="$REPO_DIR/config/model-preferences.yaml"
-PLUGIN_NAME="mcp-ask-first"
+PLUGIN_NAMES=(mcp-ask-first chain-adapt)   # config/plugins/<name>/ -> $HERMES_HOME/plugins/<name>/
 PLACEHOLDER="NOT_SET"
 HERMES_PYTHON=""
 
@@ -77,12 +77,38 @@ env_value() {   # $1 = name -> its value in $HERMES_HOME/.env, empty if absent
     | tail -1 | sed -E "s/^[\"'](.*)[\"']\$/\1/"
 }
 
+# The official installer runs `sudo apt install ripgrep` / `libatomic1` with NEEDRESTART_MODE=a
+# whenever passwordless sudo exists. On a shared test node Ubuntu's needrestart then restarts
+# every service with a replaced library — including jenkins-agent.service, which killed the
+# autotest.py run in progress on node15 and node16 on 2026-09-23 and hung both pipelines for
+# 48 h (jenkins-master docs/bug_fix/2026-09-24_agent-restart-kills-autotest-pipeline-hangs.md).
+guard_shared_node() {   # refuse to install while a test is running here
+  if pgrep -f 'autotest\.py' >/dev/null 2>&1 || [ -e /run/lock/fortistack-node.lock ]; then
+    echo "a test is running on this node (autotest.py / fortistack-node.lock); install Hermes between builds" >&2
+    exit 1
+  fi
+}
+
+preinstall_system_packages() {   # so the official installer finds them and skips its own apt calls
+  command -v apt-get >/dev/null 2>&1 || return 0
+  sudo -n true 2>/dev/null || return 0        # no passwordless sudo: upstream skips apt too
+  local missing=()
+  command -v rg >/dev/null 2>&1 || missing+=(ripgrep)
+  ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1' || missing+=(libatomic1)
+  [ ${#missing[@]} -eq 0 ] && return 0
+  info "installing ${missing[*]} with NEEDRESTART_MODE=l (list only: no service is restarted)"
+  sudo NEEDRESTART_MODE=l DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null \
+    || warn "could not install ${missing[*]}; the official installer may try again and restart services"
+}
+
 # ── 1. Hermes itself ──────────────────────────────────────────────────────────
 install_hermes() {
   say "Hermes Agent (tested: v$TESTED_HERMES_VERSION)"
   local version
   version="$(hermes_version)"
   if [ -z "$version" ]; then
+    guard_shared_node
+    preinstall_system_packages
     info "not installed: running the official installer, pinned to commit ${TESTED_HERMES_COMMIT:0:10}"
     info "(skips the setup wizard, the browser tools and Computer Use; add them later with 'hermes setup')"
     curl -fsSL "$HERMES_INSTALLER_URL" | bash -s -- --skip-setup --skip-browser --skip-computer-use \
@@ -106,10 +132,13 @@ deploy_tokens() {
 }
 
 deploy_config() {
-  say "Config -> $HERMES_HOME/config.yaml, plugin $PLUGIN_NAME"
-  mkdir -p "$HERMES_HOME/plugins/$PLUGIN_NAME"
-  cp -f "$REPO_DIR/config/plugins/$PLUGIN_NAME/plugin.yaml" "$REPO_DIR/config/plugins/$PLUGIN_NAME/__init__.py" \
-        "$HERMES_HOME/plugins/$PLUGIN_NAME/"
+  say "Config -> $HERMES_HOME/config.yaml, plugins ${PLUGIN_NAMES[*]}"
+  local plugin
+  for plugin in "${PLUGIN_NAMES[@]}"; do
+    mkdir -p "$HERMES_HOME/plugins/$plugin"
+    cp -f "$REPO_DIR/config/plugins/$plugin/plugin.yaml" "$REPO_DIR/config/plugins/$plugin/__init__.py" \
+          "$HERMES_HOME/plugins/$plugin/"
+  done
   adapt_models
 }
 
@@ -120,16 +149,22 @@ adapt_models() {
   "$HERMES_PYTHON" "$HELPER" adapt --preferences "$PREFERENCES" --fragment "$FRAGMENT" --hermes-home "$HERMES_HOME"
 }
 
+# Every 15 minutes (2026-10-19; was hourly), offset from the opencode installer and the Log
+# Intelligence server so the three probes do not hit the gateway in the same minute. A line
+# with another schedule is replaced, so re-running --cron updates it.
 install_cron() {
-  say "Cron: re-measure the models every hour"
+  say "Cron: re-measure the models every 15 minutes"
   local log="$HERMES_HOME/logs/hermes_installer_adapt.log"
-  local line="17 * * * * HERMES_HOME=$HERMES_HOME $REPO_DIR/install.sh --adapt >> $log 2>&1"
+  local marker="$REPO_DIR/install.sh --adapt"
+  local line="2-59/15 * * * * HERMES_HOME=$HERMES_HOME $marker >> $log 2>&1"
+  local current
   mkdir -p "$HERMES_HOME/logs"
-  if crontab -l 2>/dev/null | grep -qF "$REPO_DIR/install.sh --adapt"; then
+  current="$(crontab -l 2>/dev/null || true)"
+  if printf '%s\n' "$current" | grep -qxF "$line"; then
     info "already in your crontab"
   else
-    ( crontab -l 2>/dev/null || true; printf '%s\n' "$line" ) | crontab -
-    info "added: $line"
+    ( printf '%s\n' "$current" | grep -vF "$marker" || true; printf '%s\n' "$line" ) | grep -v '^$' | crontab -
+    info "installed: $line"
   fi
 }
 
@@ -232,12 +267,20 @@ verify() {
     fi
   done
 
-  say "Check: plugin $PLUGIN_NAME"
-  if hermes plugins list 2>&1 | strip_ansi | grep -qE "$PLUGIN_NAME +│ enabled"; then
-    info "enabled: Mantis filing/notes/email and Jenkins trigger/rebuild ask before running"
-  else
-    warn "$PLUGIN_NAME is not enabled (see 'hermes plugins list')"
-  fi
+  say "Check: plugins ${PLUGIN_NAMES[*]}"
+  local plugins_list plugin
+  plugins_list="$(hermes plugins list 2>&1 | strip_ansi || true)"
+  for plugin in "${PLUGIN_NAMES[@]}"; do
+    if printf '%s\n' "$plugins_list" | grep -qE "$plugin +│ enabled"; then
+      case "$plugin" in
+        mcp-ask-first) info "$plugin enabled: Mantis filing/notes/email and Jenkins trigger/rebuild ask before running" ;;
+        chain-adapt)   info "$plugin enabled: a refused model re-measures the chain at once; chain notice at session start" ;;
+        *)             info "$plugin enabled" ;;
+      esac
+    else
+      warn "$plugin is not enabled (see 'hermes plugins list')"
+    fi
+  done
 
   # One prompt per model, each from a throwaway HERMES_HOME that holds only that model
   # and its key, so every link of the chain is tested on its own.
@@ -277,6 +320,7 @@ if [ "$ADAPT_ONLY" = 1 ]; then
   find_hermes_python
   say "Models -> $HERMES_HOME/config.yaml ($(date '+%F %T'))"
   adapt_models
+  [ "$DO_CRON" = 1 ] && install_cron   # --adapt --cron: re-measure and (re)install the schedule
   exit 0
 fi
 if [ "$CHECK_ONLY" = 1 ]; then
@@ -297,5 +341,5 @@ say "Done"
 info "Start Hermes with 'hermes' in a terminal. In VS Code: Developer: Reload Window, then 'ACP: Connect to Agent' -> Hermes Agent."
 info "A Hermes that was already running keeps the old config: restart it (VS Code: 'ACP: Restart Agent')."
 info "Microsoft 365 MCP (optional, untested): 'hermes mcp login microsoft365' in a terminal with a browser, then ./install.sh again."
-info "The model chain follows the gateway: ./install.sh --adapt re-measures it (--cron runs that hourly)."
+info "The model chain follows the gateway: ./install.sh --adapt re-measures it (--cron runs that every 15 min; a refused model triggers it too, plugin chain-adapt)."
 info "Update later with: git pull && ./install.sh"

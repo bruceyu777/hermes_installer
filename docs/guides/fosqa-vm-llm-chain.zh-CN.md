@@ -310,12 +310,40 @@ VS Code 侧与 `vscode-acp.zh-CN.md` 相同，命令为 `/home/fosqa/.local/bin/
   （`/v1/models` 表示 key 能看到什么，而不是能调用什么）。含 "budget" 的 429 算拒绝，普通 429 算可用。
   不在任何 `prefer` 列表中的 id 只报告为 "new models seen"。网关无应答的 key 保留当前的链接。
   两个 key 不会在同一网关上选同一个模型（Hermes 会把第二个当重复跳过）。
-- `install.sh --cron` 添加 `17 * * * * … install.sh --adapt`（日志 `~/.hermes/logs/hermes_installer_adapt.log`），
+- `install.sh --cron` 添加 `2-59/15 * * * * … install.sh --adapt`（自 2026-10-19 起每 15 分钟；原为 `17 * * * *`；日志 `~/.hermes/logs/hermes_installer_adapt.log`），
   已在 `env -i` 下按 cron 环境测试。
 
 本虚拟机 2026-09-23 21:21 的结果：`glm-5.3-flash`（个人）→ `glm-5.3`（项目 key）→ `qwen3.6-35b-a3b` →
 `qwen3.5-122b-a10b-awq`；`qwen3-vl-235b` 报告为新模型、未使用。`install.sh --check`：四个都是
 "gateway ok, Hermes PONG"；logintel、mantis-tools、jenkins 均已连接。
+
+2026-10-19（用户："从 GLM 5.3 flash 切换到 deepseek v4.1 flash"）：网关在个人 key 上重新提供
+`deepseek-v4.1-flash`，因此两个 `prefer` 列表都改为以它开头（`config/model-preferences.yaml`），
+片段里的 `model.default` 改为 `deepseek-v4.1-flash`，回退 1 仍是项目 key 上的 `glm-5.3`（Hermes 会丢弃
+同一网关上模型相同的第二个链接）。温哥华时间 15:19 运行 `install.sh --adapt`：`deepseek-v4.1-flash`（个人）→
+`qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`；项目 key 对每个模型都返回 429 "no budget … reopens at
+7:00 PM Pacific"，所以每小时的 cron 会在 19:00 之后补上它的链接。个人 key 上的 `glm-5.3` 现在返回
+403 "your plan does not permit"；`qwen3.8-27b` 报告为新模型、未使用。Log Intelligence 服务端
+（那边的 `docs/implement_log/2026-10-19_deepseek_v41_flash_default_implement_log.md`）和 opencode_installer
+做了同样的切换。
+
+### 7.4a 动态重新测量（2026-10-19 晚）
+
+用户："如果某个模型不工作了（下线），要触发全部模型的检测并自动切换到可用模型，或者给用户建议"。
+此前只有 cron 做这件事。新增插件 `config/plugins/chain-adapt/`（由 `install.sh` 与 `mcp-ask-first` 一起部署）：
+
+- `api_request_error`：链上某个网关返回 HTTP 401/403/404 或 "does not permit" / "unknown model" 时，
+  在后台运行 `install.sh --adapt`，5 分钟内最多一次（`~/.hermes/adapt-trigger.json`），输出追加到 adapt 日志。
+  当前这一轮仍按 `fallback_providers` 回退；重新测量后的 `model.default` 对下一个会话生效。429 "no budget"
+  或 5xx 属于暂时性问题，只回退、不重新测量。
+- `on_session_start`（仅 CLI、交互式终端）：每次链变化打印一次提示——当前链、被拒绝的模型、新出现的模型及采用步骤。
+- `scripts/merge_into_hermes_home.py` 在每次 config / adapt 运行时写 `~/.hermes/adapt-status.json`（链、被拒绝的模型
+  及原因、新模型、`adapt_command`、只在真正变化时更新的 `changed_at`）。cron 改为每 15 分钟（`2-59/15`，与 opencode
+  和 Log Intelligence 服务端错开）；`install.sh --adapt --cron` 会重新安装这一行。
+
+用一个临时 `HERMES_HOME`（`FOS_AI_API_KEY` 填错误值）测试：`hermes chat -q` 经 Qwen 回答 `PONG`，插件在那里运行了
+重新测量（日志：`deepseek-v4.1-flash refused (HTTP 401)`），该目录的 `model.default` 变为 `qwen3.6-35b-a3b`。
+服务端记录：log-intelligence `docs/implement_log/2026-10-19_dynamic_llm_model_switch_implement_log.md`（英文）。
 
 ### 7.5 安装脚本测试
 
@@ -332,3 +360,5 @@ VS Code 侧与 `vscode-acp.zh-CN.md` 相同，命令为 `/home/fosqa/.local/bin/
 |---|---|
 | 2026-09-22 | 创建。通过 HTTPS 把 5 月的 v0.14.0 检出升级到 v0.21.4，用 log-intel `.env` 的密钥探测三个网关，把密钥以不冲突的名字放进 `~/.hermes/.env`，写入主模型 + 三级 `fallback_providers` 链（`${VAR}`/`key_env` 引用），删除退役的 `fos-exp-ai` 条目，通过 `state.db` 验证主路径、404 → deepseek 路径和密钥无效 → Qwen 路径，以及 `hermes acp --check`。 |
 | 2026-09-23 | 第 7 节：MCP 服务器（logintel、mantis-tools、jenkins；microsoft365 关闭），沿用 opencode 的筛选并加上 `resources/prompts: false`；插件 `mcp-ask-first`（CLI/ACP 中询问，-z/-q/cron 中拦截），通过 `-z`、`chat -q` 和脚本化 ACP 客户端验证；密钥改用安装脚本的名字；网关对个人 key 拒绝 glm-5.3 和 deepseek 后，模型链改为按 `model-preferences.yaml` 逐 key 测量（借鉴 log-intel LLM 适配器）；每小时 `--adapt` cron；本目录变为 `hermes_installer` 仓库，测试了全新安装 / 部分 token / 本虚拟机。 |
+| 2026-10-19 | 两个 `prefer` 列表都以 DeepSeek V4.1 Flash 开头（用户决定；Log Intelligence 服务端和 opencode_installer 同步切换）；片段默认模型 `deepseek-v4.1-flash`；本虚拟机重新测量了链（§7.4）。 |
+| 2026-10-19（晚） | §7.4a：插件 `chain-adapt`（永久拒绝时立即重新测量，会话开始时每次链变化提示一次）、`adapt-status.json`、cron 每 15 分钟、`--adapt --cron`。 |

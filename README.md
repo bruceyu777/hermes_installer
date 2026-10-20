@@ -2,7 +2,7 @@
 
 A ready-to-use [Hermes Agent](https://hermes-agent.nousresearch.com) setup for FortiOS QA
 VMs. It connects Fortinet's internal LLM gateways with automatic fallback, plus the Jenkins,
-Mantis and Log Intelligence MCP servers, curated the same way as the Log Intelligence AI
+Mantis, Log Intelligence and image server MCP servers, curated the same way as the Log Intelligence AI
 Assistant (and the opencode config). It works in a terminal and in VS Code.
 Clone it, add your own tokens, run one script. 简体中文: [README.zh-CN.md](README.zh-CN.md)
 
@@ -16,8 +16,15 @@ Clone it, add your own tokens, run one script. 简体中文: [README.zh-CN.md](R
 | Optional: VS Code with Remote-SSH | — |
 
 Hermes installs into your home directory and does not need sudo. If you **do** have passwordless
-sudo, Hermes's official installer uses it to add missing system packages (on node15 it ran
-`apt` to install `ripgrep`); without sudo it just skips them.
+sudo, Hermes's official installer uses it to add missing system packages (`ripgrep`, `libatomic1`);
+without sudo it just skips them.
+
+**On a shared test node (nodeNN):** an `apt install` makes Ubuntu's `needrestart` restart every
+service with a replaced library — including the Jenkins agent, which kills the test running on the
+node (this hung two pipelines for 48 h on 2026-09-23). `install.sh` therefore refuses to run while
+`autotest.py` is running or `/run/lock/fortistack-node.lock` exists, and pre-installs those two
+packages with `NEEDRESTART_MODE=l` (list only) so the official installer never calls `apt` itself.
+Install between builds.
 
 ## 2. Install
 
@@ -30,7 +37,7 @@ cp tokens.env.example tokens.env && chmod 600 tokens.env
 vi tokens.env                       # fill in what you have, leave the rest empty
 
 # 3. install: 3–7 minutes the first time, nothing to answer
-./install.sh                        # add --cron on the machine you use every day (hourly model re-check);
+./install.sh                        # add --cron on the machine you use every day (model re-check every 15 min);
                                     # leave it off on shared test nodes
 ```
 
@@ -46,7 +53,7 @@ Over a flaky SSH connection, run step 3 inside `tmux`, or detached:
 ==> Check: plugin mcp-ask-first
     enabled: Mantis filing/notes/email and Jenkins trigger/rebuild ask before running
 ==> Check: each model of the fallback chain (gateway first, then one Hermes prompt)
-    glm-5.3-flash            gateway ok, Hermes PONG
+    deepseek-v4.1-flash      gateway ok, Hermes PONG
     …                        gateway ok, Hermes PONG
 ```
 
@@ -98,10 +105,10 @@ requests appear in the panel. After a config change: **ACP: Restart Agent**.
 
 | Piece | Setting |
 |---|---|
-| Model chain | Measured, not fixed. For each key, `install.sh` sends a one-token chat call to the models in its `prefer` list ([config/model-preferences.yaml](config/model-preferences.yaml)) and keeps the first ones that answer: personal fos-ai key first, then the second fos-ai key, then the internal Qwen gateway. On 2026-09-23 that gave `glm-5.3-flash` → `glm-5.3` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`. |
-| Keeping up with the gateway | The gateway changes what each key may call without notice. `./install.sh --adapt` re-measures and rewrites the chain; `--cron` runs that every hour. A model the gateway starts offering is only reported ("new models seen") until you add it to a `prefer` list. |
+| Model chain | Measured, not fixed. For each key, `install.sh` sends a one-token chat call to the models in its `prefer` list ([config/model-preferences.yaml](config/model-preferences.yaml)) and keeps the first ones that answer: personal fos-ai key first, then the second fos-ai key, then the internal Qwen gateway. On 2026-09-23 that gave `glm-5.3-flash` → `glm-5.3` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`. Since 2026-10-19 both prefer lists start with `deepseek-v4.1-flash` (user decision, the same switch as the Log Intelligence server); measured that afternoon: `deepseek-v4.1-flash` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq` (the project key had no budget until 7 PM Pacific; off hours it adds `glm-5.3` as fallback 1). |
+| Keeping up with the gateway | The gateway changes what each key may call without notice. `./install.sh --adapt` re-measures and rewrites the chain; `--cron` runs that every 15 minutes, and the plugin `chain-adapt` runs it at once when the gateway refuses a model for good (401/403/404, "does not permit", "unknown model"), so the next session starts on a model that answers. A model the gateway starts offering is only reported ("new models seen" — in the adapt log, in `~/.hermes/adapt-status.json`, and once per change as a notice when you start `hermes` in a terminal) until you add it to a `prefer` list. |
 | Fallback | Hermes' built-in `fallback_providers`. A 401, 403, 404, 429 or 5xx on one model moves the turn to the next. |
-| MCP servers | `jenkins` (10 tools), `mantis-tools` (8 tools), `logintel` (26 read-only tools), `microsoft365` (OAuth, optional, untested). Other tools of those servers are hidden from the model. |
+| MCP servers | `jenkins` (10 tools), `mantis-tools` (8 tools), `logintel` (26 read-only tools), `image-builds` (14 read-only tools: is a build synced, image path, latest / GA build, release tags), `microsoft365` (OAuth, optional, untested). Other tools of those servers are hidden from the model. |
 | Guard rails | Filing a Mantis bug, adding a Mantis note, sending email, and starting or re-running a Jenkins build ask before running (plugin [`mcp-ask-first`](config/plugins/mcp-ask-first/__init__.py)). In the terminal it is a prompt; in VS Code a permission request. In runs with nobody to ask (`hermes -z`, `hermes chat -q`, cron) they are blocked. |
 | Secrets | None in `config.yaml`. Every token is in `~/.hermes/.env` (mode 600) and referenced by name. |
 
@@ -117,6 +124,7 @@ Fill in what you have in `tokens.env`. Leave the rest empty.
 | `MANTIS_MCP_TOKEN` | Mantis MCP | your fos-qa-assistant API token, the one you paste into the Log Intelligence AI Assistant under "My connections" | Mantis server disabled |
 | `JENKINS_MCP_TOKEN` | Jenkins MCP | `user:apitoken`. In Jenkins: your user name, Configure, API Token, Add new token | Jenkins server disabled |
 | `LOGINTEL_MCP_KEY` | Log Intelligence MCP | a personal key (starts with `limcp_`) from the Log Intelligence admin | Log Intelligence server disabled |
+| `IMAGE_SERVER_MCP_API_KEY` | image server MCP | the shared read-only key (starts with `imgmcp_`) from the image server owner | image server disabled |
 
 Microsoft 365 needs no token: run `hermes mcp login microsoft365` once in a terminal that can
 open a browser, then `./install.sh` again (it turns the server on when a login is stored).
@@ -130,16 +138,18 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 |---|---|
 | Hermes itself | if `hermes` is missing: the official installer pinned to the tested commit, without the setup wizard, browser tools and Computer Use. If older than v0.21.4: `hermes update --yes`. Otherwise left alone. |
 | `~/.hermes/.env` | your tokens, one line each; other lines are kept. Previous file saved as `.env.bak-<time>`. |
-| `~/.hermes/config.yaml` | only `model`, `fallback_providers`, this repo's four `mcp_servers` entries and `plugins.enabled`; comments and every other key are kept. Previous file saved as `config.yaml.bak-<time>`. |
+| `~/.hermes/config.yaml` | only `model`, `fallback_providers`, this repo's five `mcp_servers` entries and `plugins.enabled`; comments and every other key are kept. Previous file saved as `config.yaml.bak-<time>`. |
 | `~/.hermes/plugins/mcp-ask-first/` | copied |
 | VS Code, if present | installs the ACP Client extension (`formulahendry.acp-client`) and adds `acp.agents["Hermes Agent"]` with the full path of `hermes`, unless a working entry exists |
-| crontab (`--cron` only) | `17 * * * * … install.sh --adapt`, log in `~/.hermes/logs/hermes_installer_adapt.log` |
+| crontab (`--cron` only) | `2-59/15 * * * * … install.sh --adapt`, log in `~/.hermes/logs/hermes_installer_adapt.log` |
+| `~/.hermes/adapt-status.json` | what the last re-measure found: chain, refused models with reasons, new models seen, the re-measure command the plugin runs |
+| `~/.hermes/plugins/chain-adapt/` | re-measures the chain when a model is refused for good; prints the chain and the new models once per change at session start |
 | Check | lists and connects the MCP servers, checks the plugin, then for each model of the chain a direct gateway call and one Hermes prompt from a throwaway home |
 
 | Option | Effect |
 |---|---|
 | `--adapt` | only re-measure the models and rewrite the chain |
-| `--cron` | also add the hourly `--adapt` to your crontab |
+| `--cron` | also put `--adapt` in your crontab every 15 minutes (replaces an older schedule; with `--adapt`: only that) |
 | `--check` | only run the check |
 | `--no-install` | leave the Hermes install alone |
 | `--no-vscode` | leave VS Code alone |

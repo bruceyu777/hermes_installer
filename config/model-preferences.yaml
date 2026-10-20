@@ -10,16 +10,20 @@
 #   - a model id not in any prefer list is never used, only reported as "new, not used",
 #   - a key whose gateway cannot be reached keeps its links from the current config.yaml.
 # To adopt a new model, add it to a prefer list and run ./install.sh --adapt.
+# Order = preference (user decision 2026-10-19: DeepSeek V4.1 Flash before GLM-5.3 Flash,
+# the same switch as the Log Intelligence server). Hermes skips a second link to the same
+# model on the same gateway, so the second key takes the next model of its list when the
+# first key already took deepseek-v4.1-flash.
 
 accounts:
   - key: FOS_AI_API_KEY               # personal fos-ai key: primary
     base_url: https://fos-ai.fortinet.com/v1
     take: 1
-    prefer: [glm-5.3, glm-5.3-flash, deepseek-v4.1-flash]
+    prefer: [deepseek-v4.1-flash, glm-5.3-flash, glm-5.3]
   - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
     base_url: https://fos-ai.fortinet.com/v1
     take: 1
-    prefer: [glm-5.3, deepseek-v4.1-flash, glm-5.3-flash]
+    prefer: [deepseek-v4.1-flash, glm-5.3, glm-5.3-flash]
   - key: LOCAL_QWEN_API_KEY           # internal Qwen gateway: last resort
     base_url: https://releaseqa-aiserver.corp.fortinet.com/v1
     take: 2

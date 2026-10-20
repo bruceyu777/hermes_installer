@@ -1,7 +1,7 @@
 # Hermes Agent 团队配置
 
 面向 FortiOS QA 虚拟机的开箱即用 [Hermes Agent](https://hermes-agent.nousresearch.com) 配置：
-接入公司内部 LLM 网关并自动回退，另接 Jenkins、Mantis 和 Log Intelligence 三个 MCP 服务器，
+接入公司内部 LLM 网关并自动回退，另接 Jenkins、Mantis、Log Intelligence 和镜像服务器四个 MCP 服务器，
 工具筛选与 Log Intelligence AI Assistant（以及 opencode 配置）一致。终端和 VS Code 都能用。
 克隆、填入自己的 token、运行一个脚本即可。English: [README.md](README.md)
 
@@ -15,7 +15,13 @@
 | 可选：带 Remote-SSH 的 VS Code | — |
 
 Hermes 安装在你的主目录中，不需要 sudo。如果你**有**免密码 sudo，Hermes 官方安装脚本会用它安装缺少的系统软件包
-（在 node15 上它运行 `apt` 安装了 `ripgrep`）；没有 sudo 时会直接跳过。
+（`ripgrep`、`libatomic1`）；没有 sudo 时会直接跳过。
+
+**在共享测试节点（nodeNN）上：** 一次 `apt install` 会让 Ubuntu 的 `needrestart` 重启所有使用了被替换库的服务——
+包括 Jenkins agent，从而杀掉节点上正在运行的测试（2026-09-23 因此有两条 pipeline 挂起了 48 小时）。
+所以 `install.sh` 在 `autotest.py` 正在运行或存在 `/run/lock/fortistack-node.lock` 时会拒绝运行，
+并且会先用 `NEEDRESTART_MODE=l`（只列出、不重启）预装这两个包，让官方安装脚本不再自己调用 `apt`。
+请在两次构建之间安装。
 
 ## 2. 安装
 
@@ -28,7 +34,7 @@ cp tokens.env.example tokens.env && chmod 600 tokens.env
 vi tokens.env                       # 填写你有的，其余留空
 
 # 3. 安装：首次 3–7 分钟，无需回答任何问题
-./install.sh                        # 在你每天使用的机器上加 --cron（每小时重新检查模型）；
+./install.sh                        # 在你每天使用的机器上加 --cron（每 15 分钟重新检查模型）；
                                     # 共享测试节点上不要加
 ```
 
@@ -44,7 +50,7 @@ SSH 连接不稳定时，在 `tmux` 中运行第 3 步，或以分离方式运�
 ==> Check: plugin mcp-ask-first
     enabled: Mantis filing/notes/email and Jenkins trigger/rebuild ask before running
 ==> Check: each model of the fallback chain (gateway first, then one Hermes prompt)
-    glm-5.3-flash            gateway ok, Hermes PONG
+    deepseek-v4.1-flash      gateway ok, Hermes PONG
     …                        gateway ok, Hermes PONG
 ```
 
@@ -92,10 +98,10 @@ hermes -z "问题"          # 问一个问题，打印回答后退出
 
 | 项目 | 设置 |
 |---|---|
-| 模型链 | 测量得出，而非写死。`install.sh` 对每个 key 的 `prefer` 列表（[config/model-preferences.yaml](config/model-preferences.yaml)）逐个发一次单 token 的对话调用，保留最先应答的模型：先个人 fos-ai key，再第二个 fos-ai key，最后内部 Qwen 网关。2026-09-23 的结果是 `glm-5.3-flash` → `glm-5.3` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`。 |
-| 跟上网关变化 | 网关会不经通知地改变每个 key 能调用的模型。`./install.sh --adapt` 重新测量并改写模型链；`--cron` 让它每小时运行一次。网关新出现的模型只会被报告（"new models seen"），加入 `prefer` 列表后才会使用。 |
+| 模型链 | 测量得出，而非写死。`install.sh` 对每个 key 的 `prefer` 列表（[config/model-preferences.yaml](config/model-preferences.yaml)）逐个发一次单 token 的对话调用，保留最先应答的模型：先个人 fos-ai key，再第二个 fos-ai key，最后内部 Qwen 网关。2026-09-23 的结果是 `glm-5.3-flash` → `glm-5.3` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`。自 2026-10-19 起两个 `prefer` 列表都以 `deepseek-v4.1-flash` 开头（用户决定，与 Log Intelligence 服务端同步切换）；当天下午测得：`deepseek-v4.1-flash` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`（项目 key 在太平洋时间 19:00 前没有预算；非工作时间会加上 `glm-5.3` 作为回退 1）。 |
+| 跟上网关变化 | 网关会不经通知地改变每个 key 能调用的模型。`./install.sh --adapt` 重新测量并改写模型链；`--cron` 让它每 15 分钟运行一次，插件 `chain-adapt` 在网关永久拒绝某个模型时（401/403/404、"does not permit"、"unknown model"）会立刻运行它，下一个会话就从能应答的模型开始。网关新出现的模型只会被报告（"new models seen"——在 adapt 日志、`~/.hermes/adapt-status.json` 里，以及在终端启动 `hermes` 时每次变化提示一次），加入 `prefer` 列表后才会使用。 |
 | 回退 | Hermes 内置的 `fallback_providers`：某个模型返回 401、403、404、429 或 5xx 时，本轮对话转到下一个模型。 |
-| MCP 服务器 | `jenkins`（10 个工具）、`mantis-tools`（8 个）、`logintel`（26 个只读工具）、`microsoft365`（OAuth，可选，未测试）。这些服务器的其余工具对模型隐藏。 |
+| MCP 服务器 | `jenkins`（10 个工具）、`mantis-tools`（8 个）、`logintel`（26 个只读工具）、`image-builds`（14 个只读工具：构建是否同步完成、镜像路径、最新 / GA 构建、release tag）、`microsoft365`（OAuth，可选，未测试）。这些服务器的其余工具对模型隐藏。 |
 | 防护 | 提交 Mantis bug、添加 Mantis 备注、发邮件、启动或重跑 Jenkins 构建前都会先询问（插件 [`mcp-ask-first`](config/plugins/mcp-ask-first/__init__.py)）。终端里是提示，VS Code 里是权限请求。无人应答的运行（`hermes -z`、`hermes chat -q`、cron）中直接拦截。 |
 | 密钥 | `config.yaml` 中没有任何 token；全部在 `~/.hermes/.env`（权限 600）中，按名称引用。 |
 
@@ -111,6 +117,7 @@ hermes -z "问题"          # 问一个问题，打印回答后退出
 | `MANTIS_MCP_TOKEN` | Mantis MCP | 你的 fos-qa-assistant API token，即在 Log Intelligence AI Assistant "My connections" 中填写的那个 | 禁用 Mantis 服务器 |
 | `JENKINS_MCP_TOKEN` | Jenkins MCP | `user:apitoken`。Jenkins：用户名 → Configure → API Token → Add new token | 禁用 Jenkins 服务器 |
 | `LOGINTEL_MCP_KEY` | Log Intelligence MCP | Log Intelligence 管理员发放的个人 key（以 `limcp_` 开头） | 禁用 Log Intelligence 服务器 |
+| `IMAGE_SERVER_MCP_API_KEY` | 镜像服务器 MCP | 镜像服务器负责人提供的共享只读 key（以 `imgmcp_` 开头） | 禁用镜像服务器 |
 
 Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `hermes mcp login microsoft365`，
 再运行 `./install.sh`（检测到已保存的登录后会启用该服务器）。此项尚未测试。
@@ -123,16 +130,18 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 |---|---|
 | Hermes 本身 | 没有 `hermes` 时：用官方安装脚本安装并固定到测试过的 commit，跳过设置向导、浏览器工具和 Computer Use。低于 v0.21.4 时：`hermes update --yes`。否则不动。 |
 | `~/.hermes/.env` | 每个 token 一行，其余行保留；旧文件存为 `.env.bak-<时间>`。 |
-| `~/.hermes/config.yaml` | 只改 `model`、`fallback_providers`、本仓库的四个 `mcp_servers` 条目和 `plugins.enabled`；注释和其他键都保留。旧文件存为 `config.yaml.bak-<时间>`。 |
+| `~/.hermes/config.yaml` | 只改 `model`、`fallback_providers`、本仓库的五个 `mcp_servers` 条目和 `plugins.enabled`；注释和其他键都保留。旧文件存为 `config.yaml.bak-<时间>`。 |
 | `~/.hermes/plugins/mcp-ask-first/` | 复制 |
 | VS Code（如已安装） | 安装 ACP Client 扩展（`formulahendry.acp-client`），并添加使用 `hermes` 完整路径的 `acp.agents["Hermes Agent"]`（已有可用条目时不动） |
-| crontab（仅 `--cron`） | `17 * * * * … install.sh --adapt`，日志在 `~/.hermes/logs/hermes_installer_adapt.log` |
+| crontab（仅 `--cron`） | `2-59/15 * * * * … install.sh --adapt`，日志在 `~/.hermes/logs/hermes_installer_adapt.log` |
+| `~/.hermes/adapt-status.json` | 上次测量的结果：链、被拒绝的模型及原因、新出现的模型、插件运行的重新测量命令 |
+| `~/.hermes/plugins/chain-adapt/` | 模型被永久拒绝时重新测量链；会话开始时每次变化提示一次链和新模型 |
 | 检查 | 列出并连接 MCP 服务器，检查插件，再对模型链中每个模型做一次网关直连调用和一次 Hermes 对话（使用临时 home） |
 
 | 选项 | 作用 |
 |---|---|
 | `--adapt` | 只重新测量模型并改写模型链 |
-| `--cron` | 同时把每小时的 `--adapt` 加入 crontab |
+| `--cron` | 同时把每 15 分钟一次的 `--adapt` 加入 crontab（替换旧的时间表；与 `--adapt` 一起用时只做这一步） |
 | `--check` | 只做检查 |
 | `--no-install` | 不动 Hermes 安装 |
 | `--no-vscode` | 不动 VS Code |

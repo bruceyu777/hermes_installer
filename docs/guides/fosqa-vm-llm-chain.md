@@ -332,12 +332,47 @@ So the chain is measured, following the log-intelligence adapter
   "budget" counts as refused, a plain 429 as usable. Ids in no `prefer` list are only reported
   as "new models seen". A key whose gateway does not answer keeps its current links. Two keys
   never get the same model on the same gateway (Hermes would skip the second as a duplicate).
-- `install.sh --cron` adds `17 * * * * … install.sh --adapt` (log
+- `install.sh --cron` adds `2-59/15 * * * * … install.sh --adapt` (every 15 min since 2026-10-19; was `17 * * * *`; log
   `~/.hermes/logs/hermes_installer_adapt.log`). Tested under `env -i` like cron.
 
 Result on this VM, 2026-09-23 21:21: `glm-5.3-flash` (personal) → `glm-5.3` (project key) →
 `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`; `qwen3-vl-235b` reported as new, not used.
 `install.sh --check`: all four "gateway ok, Hermes PONG"; logintel, mantis-tools, jenkins connected.
+
+2026-10-19 (user: "switch from GLM 5.3 flash to deepseek v4.1 flash"): the gateway serves
+`deepseek-v4.1-flash` on the personal key again, so both prefer lists now start with it
+(`config/model-preferences.yaml`), the fragment's `model.default` is `deepseek-v4.1-flash`, and
+fallback 1 stays `glm-5.3` on the project key (Hermes drops a second link with the same model on
+the same gateway). `install.sh --adapt` at 15:19 Vancouver: `deepseek-v4.1-flash` (personal) →
+`qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`; the project key answered 429 "no budget … reopens at
+7:00 PM Pacific" on every model, so the hourly cron adds its link after 19:00. `glm-5.3` is now
+403 "your plan does not permit" on the personal key; `qwen3.8-27b` is reported as new, not used.
+Same decision on the Log Intelligence server
+(`docs/implement_log/2026-10-19_deepseek_v41_flash_default_implement_log.md` there) and in
+opencode_installer.
+
+### 7.4a Dynamic re-measure (2026-10-19 evening)
+
+User: "if some model is not working (retired), it will trigger all-models detection and auto
+switch to an available model, or give the user a suggestion". Until now only the cron did that.
+New plugin `config/plugins/chain-adapt/` (deployed by `install.sh` next to `mcp-ask-first`):
+
+- `api_request_error` on one of the chain's gateways with HTTP 401/403/404 or a "does not
+  permit" / "unknown model" message runs `install.sh --adapt` detached, at most once per 5 min
+  (`~/.hermes/adapt-trigger.json`), output appended to the adapt log. The current turn still
+  walks `fallback_providers`; the re-measured `model.default` applies to the next session. A
+  429 "no budget" or a 5xx is transient and only falls back.
+- `on_session_start` (CLI, interactive terminal only) prints one notice per re-measured chain:
+  the chain in use, what is refused, and the new models seen with the adopt recipe.
+- `scripts/merge_into_hermes_home.py` writes `~/.hermes/adapt-status.json` on every config /
+  adapt run (chain links, refused with reasons, new models, `adapt_command`, `changed_at` that
+  moves only on a real change). Cron is every 15 min (`2-59/15`, offset from opencode and the
+  Log Intelligence server); `install.sh --adapt --cron` reinstalls the line.
+
+Tested from a throwaway `HERMES_HOME` with a junk `FOS_AI_API_KEY`: `hermes chat -q` answered
+`PONG` through Qwen, the plugin ran the re-measure there (log: `deepseek-v4.1-flash refused (HTTP
+401)`), and that home's `model.default` moved to `qwen3.6-35b-a3b`. Server-side record:
+log-intelligence `docs/implement_log/2026-10-19_dynamic_llm_model_switch_implement_log.md`.
 
 ### 7.5 Installer tests
 
@@ -354,3 +389,5 @@ Result on this VM, 2026-09-23 21:21: `glm-5.3-flash` (personal) → `glm-5.3` (p
 |---|---|
 | 2026-09-22 | Created. Updated the May v0.14.0 checkout to v0.21.4 over HTTPS, probed the three gateways with the log-intel `.env` keys, moved the keys into `~/.hermes/.env` under non-colliding names, wrote the primary + three-entry `fallback_providers` chain with `${VAR}`/`key_env` references, removed the retired `fos-exp-ai` entry, verified primary, the 404 → deepseek path and the invalid-keys → Qwen path via `state.db`, and `hermes acp --check`. |
 | 2026-09-23 | Section 7: MCP servers (logintel, mantis-tools, jenkins; microsoft365 off) with the opencode curation plus `resources/prompts: false`; plugin `mcp-ask-first` (approve in CLI/ACP, block in -z/-q/cron), verified via `-z`, `chat -q` and a scripted ACP client; keys renamed to the installer names; model chain measured per key from `model-preferences.yaml` (lessons of the log-intel LLM adapter) after the gateway refused glm-5.3 and deepseek to the personal key; hourly `--adapt` cron; folder turned into the `hermes_installer` repo, tested fresh / partial tokens / this VM. |
+| 2026-10-19 | DeepSeek V4.1 Flash first in both prefer lists (user decision; the same switch on the Log Intelligence server and in opencode_installer); fragment default `deepseek-v4.1-flash`; chain re-measured on this VM (§7.4). |
+| 2026-10-19 (evening) | §7.4a: plugin `chain-adapt` (re-measure at once on a permanent refusal, one notice per re-measured chain at session start), `adapt-status.json`, cron every 15 min, `--adapt --cron`. |
