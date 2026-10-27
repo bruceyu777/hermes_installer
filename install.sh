@@ -86,6 +86,10 @@ find_hermes_python() {   # the Python of the Hermes venv (it has ruamel.yaml, wh
                    /usr/local/lib/hermes-agent/venv/bin/python; do
     if [ -x "$candidate" ]; then HERMES_PYTHON="$candidate"; return; fi
   done
+  # v0.22+: deps live in a managed venv under $HERMES_HOME/installs/<id>/environments/<id>/venv (newest wins)
+  for candidate in $(ls -td "$HERMES_HOME"/installs/*/environments/*/venv 2>/dev/null); do
+    if [ -x "$candidate/bin/python" ]; then HERMES_PYTHON="$candidate/bin/python"; return; fi
+  done
   echo "cannot find the Python of the Hermes install: is Hermes installed? (run without --no-install)" >&2
   exit 1
 }

@@ -33,8 +33,13 @@ from pathlib import Path
 
 try:
     import yaml
+    load_yaml = yaml.safe_load
 except ImportError:  # pragma: no cover
-    sys.exit("PyYAML is required (python3 -m pip install pyyaml)")
+    try:  # the Hermes v0.22+ venv ships ruamel.yaml but not PyYAML
+        from ruamel.yaml import YAML
+        load_yaml = YAML(typ="safe").load
+    except ImportError:
+        sys.exit("PyYAML is required (python3 -m pip install pyyaml)")
 
 REPO = Path(__file__).resolve().parent.parent
 BEGIN = "<!-- hermes_installer:host begin -->"
@@ -226,7 +231,7 @@ def main() -> None:
     ap.add_argument("--write-ssh-config", action="store_true", help="also write ~/.ssh/config.d/hermes_hosts from .env")
     args = ap.parse_args()
 
-    data = yaml.safe_load(Path(args.hosts).read_text())
+    data = load_yaml(Path(args.hosts).read_text())
     hosts = data.get("hosts") or {}
     if not hosts:
         sys.exit(f"!! no hosts in {args.hosts}")

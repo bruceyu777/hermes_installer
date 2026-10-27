@@ -47,28 +47,32 @@ hosts:
     reaches: [office2, office3, cdn, log_intel_server, guiauto1, fgt1]
 
   office2:
-    description: "my laptop (Windows; RDP is the primary login, SSH only with OpenSSH Server)"
+    description: "my laptop (dual system: Windows + a permanent Ubuntu docker; SSH lands in the Ubuntu container on port 2222)"
     ip: 172.19.136.141
     network: office
     kind: laptop
-    os: windows
-    login: { domain: FORTINET-US.COM, user_env: SSH_OFFICE2_USER }   # same AD login as office1
-    hermes: { installed: false, profiles: [default], gateway: false }   # Hermes on Windows = WSL or native; no second poller on the same bot token
-    folders: { home: 'C:\Users\yzhengfeng', git: 'C:\Users\yzhengfeng\git' }   # to confirm
+    os: ubuntu   # the container; Windows (RDP) is the host underneath
+    login: { user_env: SSH_OFFICE2_USER }   # local user fosqa in the container, password login, port 2222
+    hermes: { installed: false, profiles: [default], gateway: false }   # no second poller on the same bot token
+    folders: { home: /home/fosqa, git: ~/git }   # to confirm
     capabilities: [internet, rdp, fos-ai-gateway, jenkins-mcp, mantis-mcp, logintel-mcp]
     reaches: [office1, cdn, log_intel_server]
 
   office3:
-    description: "my new laptop (Windows; RDP is the primary login, SSH only with OpenSSH Server)"
+    description: "my new laptop (dual system: Windows + a permanent Ubuntu docker; SSH lands in the Ubuntu container on port 2222)"
     ip: 172.19.136.147
+    hostname: office3-ubuntu   # the container
     network: office
     kind: laptop
-    os: windows
-    login: { domain: FORTINET-US.COM, user_env: SSH_OFFICE3_USER }   # same AD login as office1
-    hermes: { installed: false, profiles: [default], gateway: false }   # Hermes on Windows = WSL or native; no second poller on the same bot token
-    folders: { home: 'C:\Users\yzhengfeng', git: 'C:\Users\yzhengfeng\git' }   # to confirm
-    capabilities: [internet, rdp, fos-ai-gateway, jenkins-mcp, mantis-mcp, logintel-mcp]
-    reaches: [office1, cdn, log_intel_server]
+    os: ubuntu   # the container; Windows (RDP) is the host underneath
+    login: { user_env: SSH_OFFICE3_USER }   # local user fosqa in the container, password login, port 2222
+    hermes: { installed: true, version: v0.22.5, profiles: [default], gateway: false }   # no second poller on the same bot token
+    folders:
+      git: ~/git                       # hermes_installer, claude_skill
+      hermes_home: ~/.hermes
+      skills_shared: ~/.claude/skills  # installed from ~/git/claude_skill (make push)
+    capabilities: [internet, rdp, fos-ai-gateway, local-qwen-gateway, jenkins-mcp, mantis-mcp, logintel-mcp, image-builds-mcp, vscode]
+    reaches: [office1, office2, cdn, log_intel_server, guiauto1, fgt1]
 
   cdn:
     description: "fortistackrobot server 'cdn'"
