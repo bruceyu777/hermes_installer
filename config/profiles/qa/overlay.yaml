@@ -1,0 +1,36 @@
+# Profile overlay for `qa` (see office/overlay.yaml for the merge rules).
+skills:
+  write_approval: true          # QA standards are versioned in git, not rewritten by the agent
+  guard_agent_created: true
+  creation_nudge_interval: 0
+  external_dirs:
+    - /home/yzhengfeng/git/cc_skills      # fortistack-pipeline-debug, fortistack-batch-*, autolibv3-script-debug
+memory:
+  write_approval: true
+curator:
+  enabled: false
+terminal:
+  home_mode: profile
+mcp_servers:
+  mantis-tools:
+    tools:
+      include:                  # QA skills run server-side; write tools stay behind mcp-ask-first
+        - skill_oriole_testdata
+        - skill_triage_mantis
+        - skill_fos_mantis_missing
+        - skill_fos_testscript_dsl
+        - skill_fos_troubleshoot
+        - skill_fos_cli_reference
+        - skill_fos_platform
+        - skill_fos_upgrade
+        - skill_fos_upgrade_compatibility_lookup
+        - search_crash_duplication
+        - bug_root_cause_analyze
+        - evaluate_bug
+        - search_and_summarize
+        - cm_get_latest_build
+        - cm_get_build_content
+        - cm_get_firmware_path
+        - cm_list_branches
+        - get_current_time
+local_skills: [fos-testscript-dsl, cm-builds, npi-coverage-analysis, find_regression_bugs_by_root_cause]

@@ -60,6 +60,15 @@ Over a flaky SSH connection, run step 3 inside `tmux`, or detached:
 A `!!`, `refused` or error line: see [Troubleshooting](#troubleshooting). Then open a
 **new terminal** so `hermes` is on your `PATH`.
 
+**Several hosts, several roles (optional).** `config/hosts.yaml` lists every host (IP, folders,
+capabilities, tasks that only run there); `HERMES_HOST=<name>` in `tokens.env` says which one this
+machine is and `SSH_<NAME>_*` / `RDP_<NAME>_*` hold the logins. `install.sh` then writes
+`~/.hermes/HOST.md`, a short block in `SOUL.md`, `HERMES_HOST` in `.env` and ssh aliases in
+`~/.ssh/config.d/hermes_hosts`, so the agent knows where it is and runs remote-only tasks over
+`ssh <alias>`. Role profiles: `hermes profile create qa --no-skills --description '...'`, then
+`./install.sh --profile qa` applies the shared config plus `config/profiles/qa/` (SOUL.md,
+overlay.yaml, local skills). Design: `hermes_custom_project/hermes_multi_agent_architecture_v2.1_qa.md`.
+
 Check again any time with `./install.sh --check`. The full acceptance suite (real calls, a few
 minutes) is `tests/acceptance.sh`. Update later with `git pull && ./install.sh`; your tokens
 are kept.
@@ -88,6 +97,12 @@ hermes -z "question"     # one question, print the answer, exit
 then **ACP: Connect to Agent** → *Hermes Agent* (command palette). **Ctrl+Shift+A**
 (**Cmd+Shift+A** on a Mac) opens the chat panel; **Esc** cancels the current turn. Approval
 requests appear in the panel. After a config change: **ACP: Restart Agent**.
+
+**From your phone (optional):** fill in the three `TELEGRAM_*` lines of `tokens.env` (bot
+token from @BotFather, your numeric user ID from @userinfobot) and run `./install.sh` again.
+It installs the Hermes gateway as a user service and the bot answers in Telegram: text, voice,
+photos and files; ask-first approvals are answered in the chat. Not on shared test nodes. Details and
+troubleshooting: [docs/guides/telegram.md](docs/guides/telegram.md).
 
 **Try:**
 - *"What failed in the latest FortiOS build? Group the failures by root cause."* (Log Intelligence)
@@ -125,6 +140,9 @@ Fill in what you have in `tokens.env`. Leave the rest empty.
 | `JENKINS_MCP_TOKEN` | Jenkins MCP | `user:apitoken`. In Jenkins: your user name, Configure, API Token, Add new token | Jenkins server disabled |
 | `LOGINTEL_MCP_KEY` | Log Intelligence MCP | a personal key (starts with `limcp_`) from the Log Intelligence admin | Log Intelligence server disabled |
 | `IMAGE_SERVER_MCP_API_KEY` | image server MCP | the shared read-only key (starts with `imgmcp_`) from the image server owner | image server disabled |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot (optional) | @BotFather → `/newbot` ([guide](docs/guides/telegram.md)) | gateway left alone, no bot |
+| `TELEGRAM_ALLOWED_USERS` | who may talk to the bot | your numeric user ID from @userinfobot; comma-separated for several | nobody gets an answer |
+| `TELEGRAM_HOME_CHANNEL` | where cron results and notices go | a chat ID | the single allowed user |
 
 Microsoft 365 needs no token: run `hermes mcp login microsoft365` once in a terminal that can
 open a browser, then `./install.sh` again (it turns the server on when a login is stored).
@@ -140,11 +158,12 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 | `~/.hermes/.env` | your tokens, one line each; other lines are kept. Previous file saved as `.env.bak-<time>`. |
 | `~/.hermes/config.yaml` | only `model`, `fallback_providers`, this repo's five `mcp_servers` entries and `plugins.enabled`; comments and every other key are kept. Previous file saved as `config.yaml.bak-<time>`. |
 | `~/.hermes/plugins/mcp-ask-first/` | copied |
+| Telegram gateway (only with a `TELEGRAM_BOT_TOKEN`) | `hermes gateway install` (user unit `~/.config/systemd/user/hermes-gateway.service`, enabled, linger on; no-op when it exists), then `hermes gateway restart` so it reads the new `.env` |
 | VS Code, if present | installs the ACP Client extension (`formulahendry.acp-client`) and adds `acp.agents["Hermes Agent"]` with the full path of `hermes`, unless a working entry exists |
 | crontab (`--cron` only) | `2-59/15 * * * * … install.sh --adapt`, log in `~/.hermes/logs/hermes_installer_adapt.log` |
 | `~/.hermes/adapt-status.json` | what the last re-measure found: chain, refused models with reasons, new models seen, the re-measure command the plugin runs |
 | `~/.hermes/plugins/chain-adapt/` | re-measures the chain when a model is refused for good; prints the chain and the new models once per change at session start |
-| Check | lists and connects the MCP servers, checks the plugin, then for each model of the chain a direct gateway call and one Hermes prompt from a throwaway home |
+| Check | lists and connects the MCP servers, checks the plugins, with a bot token validates it against `api.telegram.org` (bot name only) and shows the service and Telegram connection state, then for each model of the chain a direct gateway call and one Hermes prompt from a throwaway home |
 
 | Option | Effect |
 |---|---|
@@ -153,6 +172,7 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 | `--check` | only run the check |
 | `--no-install` | leave the Hermes install alone |
 | `--no-vscode` | leave VS Code alone |
+| `--no-gateway` | leave the Telegram gateway service alone |
 | `--no-check` | skip the check |
 | `--tokens FILE` | read tokens from another file |
 
@@ -178,6 +198,8 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 | An MCP server shows `✗` or an error | wrong token, or the server is down | `hermes mcp test <name>`; fix the token in `tokens.env`, `./install.sh` |
 | The approval prompt never shows and the tool is blocked | `hermes -z` / `chat -q` run: nobody to ask | run the request in an interactive session |
 | Config changes not visible in VS Code | the agent was started before the change | `ACP: Restart Agent`, or reload the window |
+| Check shows `token refused: Unauthorized` | Telegram bot token mistyped or revoked | copy it again from @BotFather into `tokens.env`, `./install.sh` |
+| The Telegram bot never answers | your numeric ID is missing from `TELEGRAM_ALLOWED_USERS`, or the gateway still holds an old `.env` | fix the ID (ask @userinfobot), `./install.sh`; by hand `hermes gateway restart`. More in [docs/guides/telegram.md](docs/guides/telegram.md) §5 |
 | `hermes model` shows a z.ai provider you never set up | a `GLM_API_KEY` line in `~/.hermes/.env` (Hermes reads that name as z.ai) | remove it; this repo never uses that name |
 
 ## Maintaining this repo
@@ -199,6 +221,7 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 | This VM: v0.21.4, LLM chain, MCP servers, adapter | [docs/guides/fosqa-vm-llm-chain.md](docs/guides/fosqa-vm-llm-chain.md) | [docs/guides/fosqa-vm-llm-chain.zh-CN.md](docs/guides/fosqa-vm-llm-chain.zh-CN.md) |
 | Install, update, roll back Hermes | [docs/guides/install-hermes.md](docs/guides/install-hermes.md) | [docs/guides/install-hermes.zh-CN.md](docs/guides/install-hermes.zh-CN.md) |
 | VS Code: ACP Client extension | [docs/guides/vscode-acp.md](docs/guides/vscode-acp.md) | [docs/guides/vscode-acp.zh-CN.md](docs/guides/vscode-acp.zh-CN.md) |
+| Telegram bot: create, configure, verify, groups, troubleshooting | [docs/guides/telegram.md](docs/guides/telegram.md) | [docs/guides/telegram.zh-CN.md](docs/guides/telegram.zh-CN.md) |
 | Original fallback design (other workstation) | [docs/guides/model-fallback.md](docs/guides/model-fallback.md) | [docs/guides/model-fallback.zh-CN.md](docs/guides/model-fallback.zh-CN.md) |
 
 Index of all docs: [docs/INDEX.md](docs/INDEX.md).

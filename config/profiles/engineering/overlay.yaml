@@ -1,0 +1,25 @@
+# Profile overlay for `engineering` (see office/overlay.yaml for the merge rules).
+skills:
+  write_approval: true
+  guard_agent_created: true
+  creation_nudge_interval: 0
+  external_dirs:
+    - /home/yzhengfeng/git/cc_skills      # fortistack-*, log-intel-*, autolibv3-script-debug (same as default)
+memory:
+  write_approval: true
+curator:
+  enabled: false
+terminal:
+  home_mode: profile
+mcp_servers:
+  mantis-tools:
+    tools:
+      include:
+        - skill_fos_testscript_dsl
+        - skill_fos_cli_reference
+        - skill_create_skill
+        - cm_get_latest_build
+        - cm_get_build_content
+        - cm_get_firmware_path
+        - get_current_time
+local_skills: [create-skill, fos-testscript-dsl, code-simplification]

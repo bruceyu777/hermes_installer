@@ -8,7 +8,7 @@ Dates are ISO `YYYY-MM-DD`.
 
 | Folder | Holds | Lifetime |
 |---|---|---|
-| `docs/guides/` | setup and how-to guides for Hermes Agent on this workstation (install, VS Code, fallback) | living, edit in place, re-verify dates |
+| `docs/guides/` | setup and how-to guides for Hermes Agent on this workstation (install, VS Code, fallback, Telegram) | living, edit in place, re-verify dates |
 | `docs/templates/` | the template for each kind above | edit when the process changes |
 | repo root (outside `docs/`) | the shareable setup: `README.md` / `README.zh-CN.md`, `install.sh`, `tokens.env.example`, `config/config.yaml` (managed part of `config.yaml`), `config/model-preferences.yaml` (measured model chain), `config/plugins/mcp-ask-first/`, `scripts/merge_into_hermes_home.py` | living; `install.sh` is the source of truth for what a VM gets |
 
@@ -33,6 +33,8 @@ pointer, not deleted. New docs come from `docs/templates/`.
 | [guides/fosqa-vm-llm-chain.zh-CN.md](guides/fosqa-vm-llm-chain.zh-CN.md) | guide | 2026-09-22 | 2026-09-23 | current | same content in Simplified Chinese |
 | [guides/install-on-a-node.md](guides/install-on-a-node.md) | guide | 2026-09-23 | 2026-09-23 | current | installing opencode and Hermes on another machine (node16, no human input): commands, output, acceptance tests (`tests/acceptance.sh`), shell-terminal usage with keys and slash commands, tips, traps, removal. Same file in both installer repos (English) |
 | [guides/install-on-a-node.zh-CN.md](guides/install-on-a-node.zh-CN.md) | guide | 2026-09-23 | 2026-09-23 | current | same content in Simplified Chinese |
+| [guides/telegram.md](guides/telegram.md) | guide | 2026-10-20 | 2026-10-20 | current | Telegram bot: create it with @BotFather, numeric user ID, the three `TELEGRAM_*` lines in `tokens.env`, what `install.sh` does (gateway user service, restart, check), verified output, chat usage and groups, troubleshooting, what the token and the allowlist can do (English) |
+| [guides/telegram.zh-CN.md](guides/telegram.zh-CN.md) | guide | 2026-10-20 | 2026-10-20 | current | same content in Simplified Chinese |
 | [templates/guide.md](templates/guide.md) | template | 2026-09-17 | 2026-09-17 | current | template for guides (copied from the opencode project) |
 
 ## History
@@ -46,3 +48,4 @@ pointer, not deleted. New docs come from `docs/templates/`.
 | 2026-09-23 (night) | `install-on-a-node` guide: node15 results, sudo and disk traps. |
 | 2026-10-19 | DeepSeek V4.1 Flash first in `config/model-preferences.yaml` and the config fragment (user decision, same switch as the Log Intelligence server and opencode_installer); fosqa-VM guide §7.4 records the re-measured chain. |
 | 2026-10-19 (evening) | New plugin `config/plugins/chain-adapt/` (re-measure the chain at once on a permanent refusal; one notice per change at session start), `adapt-status.json` from the merge script, cron every 15 min with line replacement, `--adapt --cron`; fosqa-VM guide §7.4a. |
+| 2026-10-20 | Telegram: `guides/telegram.md` (+ zh-CN); `install.sh` gained `configure_gateway` (service install + restart when a bot token is present), `--no-gateway` and the "Check: Telegram bot" section; `tokens.env.example` and the merge script gained `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USERS`, `TELEGRAM_HOME_CHANNEL`; README rows in both languages. |

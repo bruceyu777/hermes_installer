@@ -39,8 +39,15 @@ ENV_NAME_OF_TOKEN = {
     "JENKINS_MCP_TOKEN": "JENKINS_MCP_BASIC",
     "LOGINTEL_MCP_KEY": "LOGINTEL_MCP_KEY",
     "IMAGE_SERVER_MCP_API_KEY": "IMAGE_SERVER_MCP_API_KEY",
+    # Telegram bot (optional): read by `hermes gateway`, not by config.yaml.
+    "TELEGRAM_BOT_TOKEN": "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_ALLOWED_USERS": "TELEGRAM_ALLOWED_USERS",
+    "TELEGRAM_HOME_CHANNEL": "TELEGRAM_HOME_CHANNEL",
 }
 ENV_BLOCK_HEADER = "# ── hermes_installer tokens (written by install.sh from tokens.env) ──"
+# Copied to .env as they are (config/hosts.yaml, §13 of the architecture doc): which host this is,
+# and the SSH / RDP logins of the hosts the agent may reach.
+PASSTHROUGH_TOKEN = re.compile(r"^(HERMES_HOST|SSH_\w+|RDP_\w+|FGT\w*_(GUI_URL|REST_TOKEN))$")
 
 # MCP server -> the .env name its Authorization header needs. OAuth servers are on when
 # `hermes mcp login <server>` has stored a token under mcp-tokens/.
@@ -124,8 +131,21 @@ def merge_tokens(tokens_file, hermes_home):
     # Fallback key: its own value, else the one already installed, else reuse the personal key.
     if not given["FOS_AI_FALLBACK_API_KEY"] and not has_value(current, "FOS_AI_FALLBACK_API_KEY"):
         given["FOS_AI_FALLBACK_API_KEY"] = given["FOS_AI_API_KEY"] or current.get("FOS_AI_API_KEY", "")
+    # Telegram home channel (where cron results and notices go): its own value, else the one
+    # already installed, else the single allowed user.
+    allowed = given["TELEGRAM_ALLOWED_USERS"] or current.get("TELEGRAM_ALLOWED_USERS", "")
+    if not given["TELEGRAM_HOME_CHANNEL"] and not has_value(current, "TELEGRAM_HOME_CHANNEL") \
+            and allowed and "," not in allowed:
+        given["TELEGRAM_HOME_CHANNEL"] = allowed
+    for name in ("TELEGRAM_ALLOWED_USERS", "TELEGRAM_HOME_CHANNEL"):
+        if given[name] and not re.fullmatch(r"-?\d+(,-?\d+)*", given[name]):
+            print(f"    !! {name} must be numeric Telegram IDs separated by commas; ignored")
+            given[name] = ""
 
     wanted = {ENV_NAME_OF_TOKEN[name]: value for name, value in given.items() if value}
+    passthrough = {name: value for name, value in read_env_file(tokens_file).items()
+                   if PASSTHROUGH_TOKEN.match(name) and value} if os.path.exists(tokens_file) else {}
+    wanted.update(passthrough)
     lines = []
     if os.path.exists(env_path):
         with open(env_path, encoding="utf-8") as env_file:
@@ -144,6 +164,11 @@ def merge_tokens(tokens_file, hermes_home):
     write_if_changed(env_path, "\n".join(lines) + "\n", ".env")
 
     installed = read_env_file(env_path)
+    if passthrough:
+        hosts = sorted({re.sub(r"^(SSH|RDP)_(.+)_(USER|KEY|PASSWORD|PORT|DOMAIN)$", r"\2", n)
+                        for n in passthrough if n.startswith(("SSH_", "RDP_"))})
+        print(f"    host logins              set      .env {len(passthrough)} SSH/RDP values for {', '.join(hosts).lower()}"
+              + (f"; HERMES_HOST={passthrough['HERMES_HOST']}" if 'HERMES_HOST' in passthrough else ""))
     for token_name, env_name in ENV_NAME_OF_TOKEN.items():
         state = "set" if env_name in wanted else ("kept" if has_value(installed, env_name) else "missing")
         print(f"    {token_name:<24} {state:<8} .env {env_name}")

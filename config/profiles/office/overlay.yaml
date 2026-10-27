@@ -1,0 +1,27 @@
+# Profile overlay for `office`: merged into $HERMES_HOME/config.yaml after config/config.yaml by
+# scripts/apply_profile.py. Mappings deep-merge, lists are unioned (existing order kept).
+# `local_skills` is not a Hermes key: directories under SKILL_Processed/ copied to $HERMES_HOME/skills/.
+skills:
+  write_approval: true          # the agent's skill writes are staged, not applied (asset platform, v0.2 §4.3)
+  guard_agent_created: true
+  creation_nudge_interval: 0
+  external_dirs: []             # office does not need the fortistack / log-intel engineering skills
+memory:
+  write_approval: true
+curator:
+  enabled: false
+terminal:
+  home_mode: profile            # tool subprocesses get the profile's own HOME: no shared ~/.ssh, ~/.gitconfig, gh/kubectl logins
+mcp_servers:
+  mantis-tools:
+    tools:
+      include:                  # read-only server-side skills (unknown names are ignored; verify with `hermes mcp list`)
+        - skill_oriole_testdata
+        - skill_fos_mantis_missing
+        - skill_triage_my_team_mantis
+        - search_and_summarize
+        - cm_get_latest_build
+        - cm_get_build_content
+        - cm_list_branches
+        - get_current_time
+local_skills: [cm-builds]

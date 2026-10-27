@@ -1,0 +1,128 @@
+# Hosts that Hermes works on or reaches. Git-managed, shared by every install of this repo.
+#
+# install.sh reads this file, finds the host it is running on — `--host <name>`, else HERMES_HOST
+# in tokens.env / ~/.hermes/.env, else auto-detect by hostname or one of `hostname -I` — and renders $HERMES_HOME/HOST.md plus a short managed block in $HERMES_HOME/SOUL.md, so each
+# Hermes knows which host it is, what is where, what this host can do, and how to reach the others.
+#
+# No credentials here. SSH identity for a host comes from ~/.hermes/.env (see tokens.env.example):
+#   SSH_<NAME>_USER       login user (NAME = host key upper-cased, '-' and '.' -> '_')
+#   SSH_<NAME>_KEY        path to the private key   (preferred)
+#   SSH_<NAME>_PASSWORD   password, only for hosts that cannot take a key (used via sshpass)
+#   SSH_<NAME>_PORT       optional, default 22
+#   RDP_<NAME>_USER / _PASSWORD / _DOMAIN / _PORT   RDP login (xfreerdp/remmina), not for kind: fortigate
+#   FGT1_GUI_URL / FGT1_REST_TOKEN                  FortiGate GUI and REST API token
+# install.sh turns these into `Host <name>` aliases in ~/.ssh/config.d/hermes_hosts, so the agent
+# runs `ssh cdn ...`, never an IP with an inline password.
+#
+# To add a host: one block under `hosts:`, the SSH_* lines in tokens.env, optionally a `tasks:`
+# entry; commit; `git pull && ./install.sh` on every host.
+
+schema_version: 1
+
+networks:
+  office:          { cidr: 172.19.136.0/24, note: "corporate office LAN; workstation and laptops" }
+  fortistackrobot: { cidr: 10.96.234.0/24,  note: "fortistackrobot server segment; reachable from office hosts (ssh config entries exist on office1)" }
+  lab:             { cidr: 172.18.0.0/16,   note: "test lab; GUI automation host and FortiGate devices; reachability from office hosts to confirm" }
+
+hosts:
+  office1:
+    description: "the main workstation; this repo is developed and released here"
+    ip: 172.19.136.41
+    hostname: VAN-903614-PC6
+    network: office
+    kind: workstation
+    os: ubuntu
+    login: { domain: FORTINET-US.COM, user_env: SSH_OFFICE1_USER }   # AD, Kerberos member (`realm list`)
+    hermes:
+      installed: true
+      version: v0.16.0
+      profiles: [default, office, engineering, qa]   # target set; today: default, office_automation
+      gateway: true                                   # Telegram bots live here, one token per profile
+    folders:
+      git: ~/git                       # all repos; hermes_installer, cc_skills, log-intelligence client, ECC clone
+      hermes_home: ~/.hermes
+      skills_shared: ~/git/cc_skills   # symlinked into ~/.claude/skills, shared with opencode and Hermes
+      scratch: ~/tmp
+    capabilities: [internet, fos-ai-gateway, local-qwen-gateway, jenkins-mcp, mantis-mcp, logintel-mcp, image-builds-mcp, telegram-gateway, git-push, docker, vscode]
+    reaches: [office2, office3, cdn, log_intel_server, guiauto1, fgt1]
+
+  office2:
+    description: "my laptop (Windows; RDP is the primary login, SSH only with OpenSSH Server)"
+    ip: 172.19.136.141
+    network: office
+    kind: laptop
+    os: windows
+    login: { domain: FORTINET-US.COM, user_env: SSH_OFFICE2_USER }   # same AD login as office1
+    hermes: { installed: false, profiles: [default], gateway: false }   # Hermes on Windows = WSL or native; no second poller on the same bot token
+    folders: { home: 'C:\Users\yzhengfeng', git: 'C:\Users\yzhengfeng\git' }   # to confirm
+    capabilities: [internet, rdp, fos-ai-gateway, jenkins-mcp, mantis-mcp, logintel-mcp]
+    reaches: [office1, cdn, log_intel_server]
+
+  office3:
+    description: "my new laptop (Windows; RDP is the primary login, SSH only with OpenSSH Server)"
+    ip: 172.19.136.147
+    network: office
+    kind: laptop
+    os: windows
+    login: { domain: FORTINET-US.COM, user_env: SSH_OFFICE3_USER }   # same AD login as office1
+    hermes: { installed: false, profiles: [default], gateway: false }   # Hermes on Windows = WSL or native; no second poller on the same bot token
+    folders: { home: 'C:\Users\yzhengfeng', git: 'C:\Users\yzhengfeng\git' }   # to confirm
+    capabilities: [internet, rdp, fos-ai-gateway, jenkins-mcp, mantis-mcp, logintel-mcp]
+    reaches: [office1, cdn, log_intel_server]
+
+  cdn:
+    description: "fortistackrobot server 'cdn'"
+    ip: 10.96.234.39
+    network: fortistackrobot
+    kind: server
+    os: ubuntu
+    hermes: { installed: false, profiles: [default], gateway: false }
+    folders: { home: /home/fosqa, git: /home/fosqa/git }   # to confirm
+    capabilities: [fos-ai-gateway, local-qwen-gateway, docker]   # to confirm
+    reaches: [log_intel_server]
+
+  log_intel_server:
+    description: "fortistackrobot server running Log Intelligence (docker compose: web-ui, query-svc, ingestion-svc, llm-analysis-svc, postgres)"
+    ip: 10.96.234.80
+    network: fortistackrobot
+    kind: server
+    os: ubuntu
+    hermes: { installed: false, profiles: [default], gateway: false }
+    folders:
+      home: /home/fosqa
+      logintel: /home/fosqa/ai_practice/log-intelligence            # server + shared lib
+      logintel_client: /home/fosqa/ai_practice/log-intelligence/log-intel-client   # node agent, separate git repo
+      journal: /home/fosqa/ai_practice/journal
+    capabilities: [docker, postgres, alembic, logintel-server, local-qwen-gateway]
+    reaches: [cdn]
+
+  guiauto1:
+    description: "lab host for GUI automation runs"
+    ip: 172.18.57.7
+    network: lab
+    kind: server
+    os: ubuntu
+    hermes: { installed: false, profiles: [default], gateway: false }
+    folders: { home: /home/fosqa }                 # to confirm
+    capabilities: [gui-automation, browser, fortigate-access]   # framework (Selenium or other) to confirm
+    reaches: [fgt1]
+
+  fgt1:
+    description: "lab FortiGate device under test"
+    ip: 172.18.62.232
+    network: lab
+    kind: fortigate                               # FortiOS CLI over ssh, not a Linux host; no Hermes
+    hermes: { installed: false }
+    capabilities: [fortios-cli, fortios-gui, fortios-rest]
+    reaches: []
+
+# Tasks that may only be done on one host. Hermes on any other host must ssh to `host`
+# (via the alias) and run it there; it must not copy the credentials or the data to itself.
+tasks:
+  telegram_gateway:        { host: office1,          why: "one poller per bot token" }
+  hermes_installer_release: { host: office1,         why: "repo of record, git push" }
+  logintel_db_migration:   { host: log_intel_server, why: "alembic against the postgres container" }
+  logintel_redeploy:       { host: log_intel_server, why: "docker compose for the services" }
+  logintel_db_query:       { host: log_intel_server, why: "psql in the log-intelligence-postgres-1 container" }
+  gui_regression_run:      { host: guiauto1,         why: "browser and lab network" }
+  fortigate_cli:           { host: fgt1,             why: "device itself; read-only unless the task says otherwise" }

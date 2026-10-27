@@ -83,6 +83,11 @@ hermes -z "问题"          # 问一个问题，打印回答后退出
 然后在命令面板中执行 **ACP: Connect to Agent** → *Hermes Agent*。**Ctrl+Shift+A**（Mac 上是 **Cmd+Shift+A**）
 打开对话面板；**Esc** 取消当前这一轮。审批请求会显示在面板中。修改配置后：**ACP: Restart Agent**。
 
+**在手机上（可选）：** 在 `tokens.env` 里填上三个 `TELEGRAM_*` 行（@BotFather 给的机器人 token、
+@userinfobot 给的数字用户 ID），再运行一次 `./install.sh`。它会把 Hermes 网关安装为用户服务，机器人
+就在 Telegram 里应答：文字、语音、图片和文件；先询问的审批在聊天里回复即可。不要在共享测试节点上配置。
+细节和故障排查：[docs/guides/telegram.zh-CN.md](docs/guides/telegram.zh-CN.md)。
+
 **试试：**
 - *"最新的 FortiOS 构建中哪些用例失败了？按根因分组。"*（Log Intelligence）
 - *"在 Mantis 中搜索关于 'ipsec tunnel flap after upgrade' 的 bug，总结前 3 个。"*
@@ -118,6 +123,9 @@ hermes -z "问题"          # 问一个问题，打印回答后退出
 | `JENKINS_MCP_TOKEN` | Jenkins MCP | `user:apitoken`。Jenkins：用户名 → Configure → API Token → Add new token | 禁用 Jenkins 服务器 |
 | `LOGINTEL_MCP_KEY` | Log Intelligence MCP | Log Intelligence 管理员发放的个人 key（以 `limcp_` 开头） | 禁用 Log Intelligence 服务器 |
 | `IMAGE_SERVER_MCP_API_KEY` | 镜像服务器 MCP | 镜像服务器负责人提供的共享只读 key（以 `imgmcp_` 开头） | 禁用镜像服务器 |
+| `TELEGRAM_BOT_TOKEN` | Telegram 机器人（可选） | @BotFather → `/newbot`（[指南](docs/guides/telegram.zh-CN.md)） | 不动网关，没有机器人 |
+| `TELEGRAM_ALLOWED_USERS` | 谁可以和机器人对话 | @userinfobot 给出的数字用户 ID；多人用逗号分隔 | 没有人会得到回答 |
+| `TELEGRAM_HOME_CHANNEL` | cron 结果和通知发到哪里 | 一个 chat ID | 唯一的那个允许用户 |
 
 Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `hermes mcp login microsoft365`，
 再运行 `./install.sh`（检测到已保存的登录后会启用该服务器）。此项尚未测试。
@@ -132,11 +140,12 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 | `~/.hermes/.env` | 每个 token 一行，其余行保留；旧文件存为 `.env.bak-<时间>`。 |
 | `~/.hermes/config.yaml` | 只改 `model`、`fallback_providers`、本仓库的五个 `mcp_servers` 条目和 `plugins.enabled`；注释和其他键都保留。旧文件存为 `config.yaml.bak-<时间>`。 |
 | `~/.hermes/plugins/mcp-ask-first/` | 复制 |
+| Telegram 网关（仅当有 `TELEGRAM_BOT_TOKEN`） | `hermes gateway install`（用户 unit `~/.config/systemd/user/hermes-gateway.service`，已启用，开 linger；已存在时不动），然后 `hermes gateway restart` 以读取新的 `.env` |
 | VS Code（如已安装） | 安装 ACP Client 扩展（`formulahendry.acp-client`），并添加使用 `hermes` 完整路径的 `acp.agents["Hermes Agent"]`（已有可用条目时不动） |
 | crontab（仅 `--cron`） | `2-59/15 * * * * … install.sh --adapt`，日志在 `~/.hermes/logs/hermes_installer_adapt.log` |
 | `~/.hermes/adapt-status.json` | 上次测量的结果：链、被拒绝的模型及原因、新出现的模型、插件运行的重新测量命令 |
 | `~/.hermes/plugins/chain-adapt/` | 模型被永久拒绝时重新测量链；会话开始时每次变化提示一次链和新模型 |
-| 检查 | 列出并连接 MCP 服务器，检查插件，再对模型链中每个模型做一次网关直连调用和一次 Hermes 对话（使用临时 home） |
+| 检查 | 列出并连接 MCP 服务器，检查插件，有机器人 token 时向 `api.telegram.org` 验证它（只显示机器人名字）并显示服务和 Telegram 连接状态，再对模型链中每个模型做一次网关直连调用和一次 Hermes 对话（使用临时 home） |
 
 | 选项 | 作用 |
 |---|---|
@@ -145,6 +154,7 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 | `--check` | 只做检查 |
 | `--no-install` | 不动 Hermes 安装 |
 | `--no-vscode` | 不动 VS Code |
+| `--no-gateway` | 不动 Telegram 网关服务 |
 | `--no-check` | 跳过检查 |
 | `--tokens FILE` | 从其他文件读取 token |
 
@@ -168,6 +178,8 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 | 某个 MCP 服务器显示 `✗` 或报错 | token 错误或服务器宕机 | `hermes mcp test <name>`；在 `tokens.env` 中修正后运行 `./install.sh` |
 | 没有出现审批提示，工具被拦截 | `hermes -z` / `chat -q` 运行时无人应答 | 在交互式会话中执行该请求 |
 | VS Code 中看不到配置改动 | agent 在改动之前已启动 | `ACP: Restart Agent` 或重新加载窗口 |
+| 检查显示 `token refused: Unauthorized` | Telegram 机器人 token 抄错或已吊销 | 从 @BotFather 重新复制到 `tokens.env`，`./install.sh` |
+| Telegram 机器人始终不回答 | 你的数字 ID 不在 `TELEGRAM_ALLOWED_USERS`，或网关还拿着旧的 `.env` | 修正 ID（问 @userinfobot），`./install.sh`；手工配置则 `hermes gateway restart`。更多见 [docs/guides/telegram.zh-CN.md](docs/guides/telegram.zh-CN.md) 第 5 节 |
 | `hermes model` 显示从未设置过的 z.ai provider | `~/.hermes/.env` 中有 `GLM_API_KEY` 行（Hermes 把这个名字当作 z.ai） | 删除它；本仓库从不使用这个名字 |
 
 ## 维护本仓库
@@ -187,6 +199,7 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 | 本虚拟机：v0.21.4、LLM 链、MCP 服务器、自动适配 | [docs/guides/fosqa-vm-llm-chain.md](docs/guides/fosqa-vm-llm-chain.md) | [docs/guides/fosqa-vm-llm-chain.zh-CN.md](docs/guides/fosqa-vm-llm-chain.zh-CN.md) |
 | 安装、更新、回滚 Hermes | [docs/guides/install-hermes.md](docs/guides/install-hermes.md) | [docs/guides/install-hermes.zh-CN.md](docs/guides/install-hermes.zh-CN.md) |
 | VS Code：ACP Client 扩展 | [docs/guides/vscode-acp.md](docs/guides/vscode-acp.md) | [docs/guides/vscode-acp.zh-CN.md](docs/guides/vscode-acp.zh-CN.md) |
+| Telegram 机器人：创建、配置、验证、群聊、故障排查 | [docs/guides/telegram.md](docs/guides/telegram.md) | [docs/guides/telegram.zh-CN.md](docs/guides/telegram.zh-CN.md) |
 | 最初的回退设计（另一台工作站） | [docs/guides/model-fallback.md](docs/guides/model-fallback.md) | [docs/guides/model-fallback.zh-CN.md](docs/guides/model-fallback.zh-CN.md) |
 
 全部文档索引：[docs/INDEX.md](docs/INDEX.md)。

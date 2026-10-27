@@ -2,3 +2,5 @@ tokens.env
 *.key
 *.bak*
 __pycache__/
+autotest_copilot
+
