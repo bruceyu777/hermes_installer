@@ -457,7 +457,7 @@ flowchart LR
 
 ```yaml
 schema_version: 1
-networks:   { office: {cidr: 172.19.136.0/24}, fortistackrobot: {cidr: 10.96.234.0/24}, lab: {cidr: 172.18.0.0/16} }
+networks:   { office: {cidr: 172.19.136.0/24}, fortistackrobot: {cidr: 10.161.69.0/24}, lab: {cidr: 172.18.0.0/16} }
 hosts:
   <name>:                      # lower-case; used as the ssh alias and the .env prefix
     description: ...
@@ -480,8 +480,8 @@ The first 7 hosts and 7 host-exclusive tasks:
 | `office1` | this workstation (VAN-903614-PC6), repo development and release, Telegram gateway | 172.19.136.41 | office | workstation | `telegram_gateway`, `hermes_installer_release` |
 | `office2` | laptop (Windows) | 172.19.136.141 | office | laptop | — |
 | `office3` | new laptop (Windows) | 172.19.136.147 | office | laptop | — |
-| `cdn` | fortistackrobot server | 10.96.234.39 | fortistackrobot | server | — |
-| `log_intel_server` | fortistackrobot, Log Intelligence (docker compose, postgres) | 10.96.234.80 | fortistackrobot | server | `logintel_db_migration`, `logintel_redeploy`, `logintel_db_query` |
+| `cdn` | fortistackrobot server | 10.161.69.120 | fortistackrobot | server | — |
+| `log_intel_server` | fortistackrobot, Log Intelligence (docker compose, postgres) | 10.161.69.237 | fortistackrobot | server | `logintel_db_migration`, `logintel_redeploy`, `logintel_db_query` |
 | `guiauto1` | lab GUI automation host | 172.18.57.7 | lab | server | `gui_regression_run` |
 | `fgt1` | lab FortiGate under test (FortiOS CLI, no Hermes) | 172.18.62.232 | lab | fortigate | `fortigate_cli` |
 
@@ -508,8 +508,8 @@ Capabilities: internet, fos-ai-gateway, local-qwen-gateway, jenkins/mantis/login
 
 ## Other hosts you can reach from here
 | alias | ip | kind | folders | capabilities |
-| log_intel_server | 10.96.234.80 | server | /home/fosqa/ai_practice/log-intelligence … | docker, postgres, alembic, logintel-server |
-| cdn | 10.96.234.39 | server | /home/fosqa (to confirm) | docker (to confirm) |
+| log_intel_server | 10.161.69.237 | server | /home/fosqa/ai_practice/log-intelligence … | docker, postgres, alembic, logintel-server |
+| cdn | 10.161.69.120 | server | /home/fosqa (to confirm) | docker (to confirm) |
 | guiauto1 | 172.18.57.7 | server | /home/fosqa (to confirm) | gui-automation, browser |
 | fgt1 | 172.18.62.232 | fortigate | — | fortios-cli, fortios-gui, fortios-rest |
 ```

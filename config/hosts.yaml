@@ -21,7 +21,7 @@ schema_version: 1
 
 networks:
   office:          { cidr: 172.19.136.0/24, note: "corporate office LAN; workstation and laptops" }
-  fortistackrobot: { cidr: 10.96.234.0/24,  note: "fortistackrobot server segment; reachable from office hosts (ssh config entries exist on office1)" }
+  fortistackrobot: { cidr: 10.161.69.0/24, note: "fortistackrobot server segment, chicago-a since 2026-11-10 (the old 10.96.234.0/24 servers are retired); reachability from office hosts to confirm" }
   lab:             { cidr: 172.18.0.0/16,   note: "test lab; GUI automation host and FortiGate devices; reachability from office hosts to confirm" }
 
 hosts:
@@ -75,8 +75,9 @@ hosts:
     reaches: [office1, office2, cdn, log_intel_server, guiauto1, fgt1]
 
   cdn:
-    description: "fortistackrobot server 'cdn'"
-    ip: 10.96.234.39
+    description: "fortistackrobot server 'cdn': Jenkins master releaseqa-stackjenkins, autolib Mongo, image store"
+    ip: 10.161.69.120            # 2026-11-10; the old 10.96.234.39 is retired
+    hostname: cdnfortistack
     network: fortistackrobot
     kind: server
     os: ubuntu
@@ -87,7 +88,8 @@ hosts:
 
   log_intel_server:
     description: "fortistackrobot server running Log Intelligence (docker compose: web-ui, query-svc, ingestion-svc, llm-analysis-svc, postgres)"
-    ip: 10.96.234.80
+    ip: 10.161.69.237            # 2026-11-10, releaseqa-logintelligence; the old 10.96.234.80 is retired
+    hostname: all-in-one-node254
     network: fortistackrobot
     kind: server
     os: ubuntu

@@ -457,7 +457,7 @@ flowchart LR
 
 ```yaml
 schema_version: 1
-networks:   { office: {cidr: 172.19.136.0/24}, fortistackrobot: {cidr: 10.96.234.0/24}, lab: {cidr: 172.18.0.0/16} }
+networks:   { office: {cidr: 172.19.136.0/24}, fortistackrobot: {cidr: 10.161.69.0/24}, lab: {cidr: 172.18.0.0/16} }
 hosts:
   <name>:                      # 小写，作为 ssh 别名和 .env 前缀
     description: ...
@@ -480,8 +480,8 @@ tasks:                         # 只能在某台主机做的事
 | `office1` | 本机工作站（VAN-903614-PC6），仓库开发与发布，Telegram 网关 | 172.19.136.41 | office | workstation | `telegram_gateway`、`hermes_installer_release` |
 | `office2` | 笔记本 | 172.19.136.141 | office | laptop | — |
 | `office3` | 新笔记本 | 172.19.136.147 | office | laptop | — |
-| `cdn` | fortistackrobot 服务器 | 10.96.234.39 | fortistackrobot | server | — |
-| `log_intel_server` | fortistackrobot，Log Intelligence（docker compose、postgres） | 10.96.234.80 | fortistackrobot | server | `logintel_db_migration`、`logintel_redeploy`、`logintel_db_query` |
+| `cdn` | fortistackrobot 服务器 | 10.161.69.120 | fortistackrobot | server | — |
+| `log_intel_server` | fortistackrobot，Log Intelligence（docker compose、postgres） | 10.161.69.237 | fortistackrobot | server | `logintel_db_migration`、`logintel_redeploy`、`logintel_db_query` |
 | `guiauto1` | 实验室 GUI 自动化主机 | 172.18.57.7 | lab | server | `gui_regression_run` |
 | `fgt1` | 实验室 FortiGate 被测设备（FortiOS CLI，不装 Hermes） | 172.18.62.232 | lab | fortigate | `fortigate_cli` |
 
@@ -508,8 +508,8 @@ Capabilities: internet, fos-ai-gateway, local-qwen-gateway, jenkins/mantis/login
 
 ## Other hosts you can reach from here
 | alias | ip | kind | folders | capabilities |
-| log_intel_server | 10.96.234.80 | server | /home/fosqa/ai_practice/log-intelligence … | docker, postgres, alembic, logintel-server |
-| cdn | 10.96.234.39 | server | /home/fosqa (to confirm) | docker (to confirm) |
+| log_intel_server | 10.161.69.237 | server | /home/fosqa/ai_practice/log-intelligence … | docker, postgres, alembic, logintel-server |
+| cdn | 10.161.69.120 | server | /home/fosqa (to confirm) | docker (to confirm) |
 | guiauto1 | 172.18.57.7 | server | /home/fosqa (to confirm) | gui-automation, browser |
 | fgt1 | 172.18.62.232 | fortigate | — | fortios-cli, fortios-gui, fortios-rest |
 ```
