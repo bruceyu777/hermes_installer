@@ -1,29 +1,46 @@
 # How ./install.sh (and ./install.sh --adapt) builds the Hermes model chain.
 #
 # The fos-ai gateway and the local Qwen server change models without notice: a model can
-# disappear, become "not permitted" for a key, or run out of budget for a time block. So the
-# chain is not fixed. Each run probes every key below with a one-token chat call (a model in
-# /v1/models is not necessarily callable) and keeps, per key, the first `take` models of its
-# `prefer` list that answered. The chain is the keys in this order. Same lessons as the Log
-# Intelligence LLM automatic adapter (log-intelligence docs/implement_log/2026-09-24_llm_automatic_adapter_plan.md):
+# disappear, be renamed, become "not permitted" for a key, or run out of budget for a time
+# block. So the chain is not fixed. Each run probes every key below with a one-token chat call
+# (a model in /v1/models is not necessarily callable) and keeps, per key, the first `take`
+# models of its `prefer` list that answered. The chain is the keys in this order.
+#
+# An entry that starts with "@" is a ROLE the gateway resolves for that key
+# (GET /v1/client-config): "@default" = the fleet's everyday model, "@small" = its background
+# model, "@deep" = its hardest-problems model when the key reaches one ("@fable" / "@opus" /
+# "@sonnet" / "@haiku" = the raw aliases it publishes). Since 2026-11 the
+# gateway serves tiers (ember = small, flare = everyday, inferno = hardest problems) and
+# re-points them to new models itself, so "@default" first means a rename or a new model needs
+# no edit here. The tier name after it is the fallback for the day the endpoint is missing;
+# a role the gateway does not publish is skipped. Quote the "@" entries (YAML reserves "@").
+#
+# Write TIER names here, not concrete model ids: on 2026-11-13 the gateway re-pointed the id
+# mimo-v2.6-flash to another model within the hour, and the old ids deepseek-v4.1-flash / glm-5.3
+# kept answering (served by another model) for half an hour after they left /v1/models, then
+# became 403.
+#
+# Rules (same as the Log Intelligence LLM automatic adapter):
+#   - a model the gateway does not list in /v1/models is never used, even when it still answers,
 #   - a 429 that mentions "budget" = refused for now; a plain 429 rate limit = still usable,
-#   - a model id not in any prefer list is never used, only reported as "new, not used",
+#   - a model id that is neither in a prefer list nor named by a role is never used, only
+#     reported as "new, not used",
 #   - a key whose gateway cannot be reached keeps its links from the current config.yaml.
-# To adopt a new model, add it to a prefer list and run ./install.sh --adapt.
-# Order = preference (user decision 2026-10-19: DeepSeek V4.1 Flash before GLM-5.3 Flash,
-# the same switch as the Log Intelligence server). Hermes skips a second link to the same
-# model on the same gateway, so the second key takes the next model of its list when the
-# first key already took deepseek-v4.1-flash.
+# To adopt a model the roles do not cover, add its id to a prefer list and run ./install.sh --adapt.
+#
+# Order = preference (2026-11-13: the everyday tier leads on both fos-ai keys). Hermes skips a
+# second link to the same model on the same gateway, so the second key cannot repeat "flare"
+# after the first key took it: it takes the small tier.
 
 accounts:
   - key: FOS_AI_API_KEY               # personal fos-ai key: primary
     base_url: https://fos-ai.fortinet.com/v1
     take: 1
-    prefer: [deepseek-v4.1-flash, glm-5.3-flash, glm-5.3]
+    prefer: ["@default", flare, "@small", ember]
   - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
     base_url: https://fos-ai.fortinet.com/v1
     take: 1
-    prefer: [deepseek-v4.1-flash, glm-5.3, glm-5.3-flash]
+    prefer: ["@default", flare, "@small", ember]
   - key: LOCAL_QWEN_API_KEY           # internal Qwen gateway: last resort
     base_url: https://releaseqa-aiserver.corp.fortinet.com/v1
     take: 2

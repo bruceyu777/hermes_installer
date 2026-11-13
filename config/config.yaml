@@ -13,18 +13,20 @@
 # with a measured one: each key gets a one-token chat probe and the chain is built from the
 # prefer lists in model-preferences.yaml, because the gateway changes what each key may call
 # without notice (on 2026-09-23 glm-5.3 and deepseek-v4.1-flash were refused to the personal key
-# within hours; on 2026-10-19 deepseek-v4.1-flash came back and became the preferred model).
-# Fallback 1 is glm-5.3 on purpose: Hermes drops a fallback whose base URL and model both
+# within hours; on 2026-10-19 deepseek-v4.1-flash came back; in 2026-11 every id was replaced by
+# the tiers ember / flare / inferno, which the gateway re-points to new models itself). The
+# prefer lists therefore start with the role "@default": the gateway names the model.
+# Fallback 1 is the small tier on purpose: Hermes drops a fallback whose base URL and model both
 # match an earlier link, so the second key must not repeat the primary's model.
 model:
-  default: deepseek-v4.1-flash
+  default: flare
   provider: custom
   base_url: https://fos-ai.fortinet.com/v1
   api_key: ${FOS_AI_API_KEY}
 
 fallback_providers:
   - provider: custom
-    model: glm-5.3
+    model: ember
     base_url: https://fos-ai.fortinet.com/v1
     key_env: FOS_AI_FALLBACK_API_KEY
   - provider: custom

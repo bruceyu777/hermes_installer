@@ -2,7 +2,7 @@
 title: fosqa 虚拟机上的 Hermes Agent：升级到 v0.21.4 与三级 LLM 链（fos-ai 个人令牌 → fos-ai 项目令牌 → 本地 Qwen）
 kind: guide
 created: 2026-09-22
-updated: 2026-09-23
+updated: 2026-11-13
 status: current
 verified_against: Hermes Agent v0.21.4（上游 c0d7294769，2026-09-23），Ubuntu 24.04 LTS（内核 6.8.0-60），Python 3.11 venv 位于 ~/.hermes/hermes-agent/venv，2026-09-22 一次性运行实测
 summary: 记录 fosqa 虚拟机上 5 月遗留的安装如何升级到 v0.21.4，并配置为：个人 fos-ai 令牌上的 glm-5.3 为主模型，Log Intelligence 项目令牌上的 deepseek-v4.1-flash 为回退 1，内部 Qwen 网关为回退 2/3；所有密钥只存放在 ~/.hermes/.env，每一级都经过验证。
@@ -345,6 +345,42 @@ VS Code 侧与 `vscode-acp.zh-CN.md` 相同，命令为 `/home/fosqa/.local/bin/
 重新测量（日志：`deepseek-v4.1-flash refused (HTTP 401)`），该目录的 `model.default` 变为 `qwen3.6-35b-a3b`。
 服务端记录：log-intelligence `docs/implement_log/2026-10-19_dynamic_llm_model_switch_implement_log.md`（英文）。
 
+### 7.4b 网关角色（2026-11-13）
+
+2026-11-13 网关把所有模型 id 换成了三个档位——`ember`（快）、`flare`（日常，全员默认）和 `inferno`
+（最难的问题，仅个人 key）——并由网关自己把档位指向更新的模型。旧 id 并不是立刻失效：`deepseek-v4.1-flash`
+和 `glm-5.3` 还继续应答了一段时间（实际由另一个模型悄悄应答），大约半小时之后变成了 HTTP 403。也就是说，
+写着模型 id 的 prefer 列表可能已经错了，而所有探测仍然是绿的。
+
+网关同时按 API key 公布客户端应该使用什么：`GET <base_url>/client-config`（默认模型、小模型、别名、
+该 key 能使用的模型）。prefer 列表现在向网关询问，而不是写死模型名：
+
+```yaml
+accounts:
+  - key: FOS_AI_API_KEY               # personal fos-ai key: primary
+    base_url: https://fos-ai.fortinet.com/v1
+    take: 1
+    prefer: ["@default", flare, "@small", ember]
+  - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
+    base_url: https://fos-ai.fortinet.com/v1
+    take: 1
+    prefer: ["@default", flare, "@small", ember]
+```
+
+| 条目 | 含义 |
+|---|---|
+| `"@default"` | 网关为该 key 指定的日常模型（`tau.default_model`，否则取 `sonnet` 别名） |
+| `"@small"` | 网关的后台模型（`tau.small_model`，否则取 `haiku` 别名） |
+| `"@deep"` | `fable` 别名，前提是它是一个独立的模型；这里的列表都不包含它——深度档位每个输出 token 的价格约为日常档位的 12 倍，需要时用 `hermes -m` 手动选择 |
+| 角色之后的字面 id | 该接口没有应答时使用；这里只写档位名 |
+
+`"@…"` 条目必须加引号（YAML 保留了 `@`）。`scripts/merge_into_hermes_home.py` 新增的规则：解析出的角色
+仍必须通过聊天探测；`/v1/models` 不再列出的 id 即使还能应答也会被跳过；`adapt-status.json` 记录
+`gateway_roles`，当网关公布的主机名与 `base_url` 不同时还会记录 `gateway_advertised`。Hermes 仍然会去掉
+base URL 和模型都与前面某一环相同的回退，所以第二个 key 不能重复 `flare`，会使用小档位。以后默认模型改名
+或换指向，本仓库都不需要修改。本虚拟机测得：`flare (FOS_AI_API_KEY) → qwen3.6-35b-a3b →
+qwen3.5-122b-a10b-awq`；非工作时间项目 key 会在 `flare` 之后加上 `ember`。
+
 ### 7.5 安装脚本测试
 
 | 场景 | 结果 |
@@ -362,3 +398,4 @@ VS Code 侧与 `vscode-acp.zh-CN.md` 相同，命令为 `/home/fosqa/.local/bin/
 | 2026-09-23 | 第 7 节：MCP 服务器（logintel、mantis-tools、jenkins；microsoft365 关闭），沿用 opencode 的筛选并加上 `resources/prompts: false`；插件 `mcp-ask-first`（CLI/ACP 中询问，-z/-q/cron 中拦截），通过 `-z`、`chat -q` 和脚本化 ACP 客户端验证；密钥改用安装脚本的名字；网关对个人 key 拒绝 glm-5.3 和 deepseek 后，模型链改为按 `model-preferences.yaml` 逐 key 测量（借鉴 log-intel LLM 适配器）；每小时 `--adapt` cron；本目录变为 `hermes_installer` 仓库，测试了全新安装 / 部分 token / 本虚拟机。 |
 | 2026-10-19 | 两个 `prefer` 列表都以 DeepSeek V4.1 Flash 开头（用户决定；Log Intelligence 服务端和 opencode_installer 同步切换）；片段默认模型 `deepseek-v4.1-flash`；本虚拟机重新测量了链（§7.4）。 |
 | 2026-10-19（晚） | §7.4a：插件 `chain-adapt`（永久拒绝时立即重新测量，会话开始时每次链变化提示一次）、`adapt-status.json`、cron 每 15 分钟、`--adapt --cron`。 |
+| 2026-11-13 | §7.4b：网关角色。网关把所有模型 id 换成了档位（`ember` / `flare` / `inferno`）；prefer 列表改为向网关询问 `"@default"` / `"@small"`（`GET /v1/client-config`），不再写模型名，并跳过 `/v1/models` 不再列出的 id；片段默认模型 `flare`，第二个 key 的回退 1 为 `ember`；本虚拟机的链：`flare` → Qwen。 |

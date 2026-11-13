@@ -50,7 +50,7 @@ SSH 连接不稳定时，在 `tmux` 中运行第 3 步，或以分离方式运�
 ==> Check: plugin mcp-ask-first
     enabled: Mantis filing/notes/email and Jenkins trigger/rebuild ask before running
 ==> Check: each model of the fallback chain (gateway first, then one Hermes prompt)
-    deepseek-v4.1-flash      gateway ok, Hermes PONG
+    flare                    gateway ok, Hermes PONG
     …                        gateway ok, Hermes PONG
 ```
 
@@ -103,7 +103,7 @@ hermes -z "问题"          # 问一个问题，打印回答后退出
 
 | 项目 | 设置 |
 |---|---|
-| 模型链 | 测量得出，而非写死。`install.sh` 对每个 key 的 `prefer` 列表（[config/model-preferences.yaml](config/model-preferences.yaml)）逐个发一次单 token 的对话调用，保留最先应答的模型：先个人 fos-ai key，再第二个 fos-ai key，最后内部 Qwen 网关。2026-09-23 的结果是 `glm-5.3-flash` → `glm-5.3` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`。自 2026-10-19 起两个 `prefer` 列表都以 `deepseek-v4.1-flash` 开头（用户决定，与 Log Intelligence 服务端同步切换）；当天下午测得：`deepseek-v4.1-flash` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`（项目 key 在太平洋时间 19:00 前没有预算；非工作时间会加上 `glm-5.3` 作为回退 1）。 |
+| 模型链 | 测量得出，而非写死。`install.sh` 对每个 key 的 `prefer` 列表（[config/model-preferences.yaml](config/model-preferences.yaml)）逐个发一次单 token 的对话调用，保留最先应答的模型：先个人 fos-ai key，再第二个 fos-ai key，最后内部 Qwen 网关。2026-09-23 的结果是 `glm-5.3-flash` → `glm-5.3` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`。自 2026-10-19 起两个 `prefer` 列表都以 `deepseek-v4.1-flash` 开头（用户决定，与 Log Intelligence 服务端同步切换）；当天下午测得：`deepseek-v4.1-flash` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`（项目 key 在太平洋时间 19:00 前没有预算；非工作时间会加上 `glm-5.3` 作为回退 1）。自 2026-11-13 起列表不再写模型名：网关把所有模型 id 换成了档位（`ember`、`flare`、`inferno`），并按 key 公布应该使用什么（`GET /v1/client-config`），所以两个 fos-ai 的 `prefer` 列表都以角色 `"@default"` 开头（其次是 `"@small"`），`/v1/models` 不再列出的 id 即使还能应答也会被跳过；当天下午测得：`flare` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`（非工作时间第二个 key 会加上 `ember` 作为回退 1，因为 Hermes 会去掉同一网关上重复的模型）。以后默认模型改名或换指向，这里都不需要修改。 |
 | 跟上网关变化 | 网关会不经通知地改变每个 key 能调用的模型。`./install.sh --adapt` 重新测量并改写模型链；`--cron` 让它每 15 分钟运行一次，插件 `chain-adapt` 在网关永久拒绝某个模型时（401/403/404、"does not permit"、"unknown model"）会立刻运行它，下一个会话就从能应答的模型开始。网关新出现的模型只会被报告（"new models seen"——在 adapt 日志、`~/.hermes/adapt-status.json` 里，以及在终端启动 `hermes` 时每次变化提示一次），加入 `prefer` 列表后才会使用。 |
 | 回退 | Hermes 内置的 `fallback_providers`：某个模型返回 401、403、404、429 或 5xx 时，本轮对话转到下一个模型。 |
 | MCP 服务器 | `jenkins`（10 个工具）、`mantis-tools`（8 个）、`logintel`（26 个只读工具）、`image-builds`（14 个只读工具：构建是否同步完成、镜像路径、最新 / GA 构建、release tag）、`microsoft365`（OAuth，可选，未测试）。这些服务器的其余工具对模型隐藏。 |

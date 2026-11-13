@@ -2,7 +2,7 @@
 title: Hermes Agent on the fosqa VM: update to v0.21.4 and the three-tier LLM chain (fos-ai personal → fos-ai project → local Qwen)
 kind: guide
 created: 2026-09-22
-updated: 2026-09-23
+updated: 2026-11-13
 status: current
 verified_against: Hermes Agent v0.21.4 (upstream c0d7294769, 2026-09-23), Ubuntu 24.04 LTS (kernel 6.8.0-60), Python 3.11 venv under ~/.hermes/hermes-agent/venv, live one-shot runs on 2026-09-22
 summary: How the pre-existing May install on the fosqa VM was brought to v0.21.4 and configured so glm-5.3 on the personal fos-ai token is primary, deepseek-v4.1-flash on the Log Intelligence project token is fallback 1, and the internal Qwen gateway is fallback 2/3, with every key kept in ~/.hermes/.env and each leg verified.
@@ -374,6 +374,47 @@ Tested from a throwaway `HERMES_HOME` with a junk `FOS_AI_API_KEY`: `hermes chat
 401)`), and that home's `model.default` moved to `qwen3.6-35b-a3b`. Server-side record:
 log-intelligence `docs/implement_log/2026-10-19_dynamic_llm_model_switch_implement_log.md`.
 
+### 7.4b Gateway roles (2026-11-13)
+
+On 2026-11-13 the gateway replaced every model id by three tiers — `ember` (fast), `flare`
+(everyday, the fleet default) and `inferno` (hardest problems, personal key only) — which it
+re-points to newer models itself. The old ids did not fail at once: `deepseek-v4.1-flash` and
+`glm-5.3` kept answering for a while, silently served by another model, and became HTTP 403
+about half an hour later. A prefer list of model ids can be wrong while every probe is green.
+
+The gateway also publishes, per API key, what a client should run:
+`GET <base_url>/client-config` (default model, small model, aliases, the models the key can
+reach). The prefer lists ask for that instead of naming a model:
+
+```yaml
+accounts:
+  - key: FOS_AI_API_KEY               # personal fos-ai key: primary
+    base_url: https://fos-ai.fortinet.com/v1
+    take: 1
+    prefer: ["@default", flare, "@small", ember]
+  - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
+    base_url: https://fos-ai.fortinet.com/v1
+    take: 1
+    prefer: ["@default", flare, "@small", ember]
+```
+
+| Entry | Meaning |
+|---|---|
+| `"@default"` | the everyday model the gateway names for this key (`tau.default_model`, else the `sonnet` alias) |
+| `"@small"` | its background model (`tau.small_model`, else the `haiku` alias) |
+| `"@deep"` | the `fable` alias, when it is a model of its own; not in any list here — the deep tier costs about 12 times the everyday one per output token, pick it by hand with `hermes -m` |
+| a literal id after a role | used when the endpoint does not answer; keep these on tier names |
+
+Quote the `"@…"` entries (YAML reserves `@`). Rules added to
+`scripts/merge_into_hermes_home.py`: a resolved role must still answer the chat probe; an id
+that `/v1/models` no longer lists is skipped even if it answers; `adapt-status.json` records
+`gateway_roles` and, when the gateway names itself by another host than `base_url`,
+`gateway_advertised`. Hermes still drops a fallback whose base URL and model both match an
+earlier link, so the second key cannot repeat `flare` and takes the small tier. A renamed or
+re-pointed default now needs no edit in this repo. Measured on this VM: `flare
+(FOS_AI_API_KEY) → qwen3.6-35b-a3b → qwen3.5-122b-a10b-awq`; off hours the project key adds
+`ember` after `flare`.
+
 ### 7.5 Installer tests
 
 | Scenario | Result |
@@ -391,3 +432,4 @@ log-intelligence `docs/implement_log/2026-10-19_dynamic_llm_model_switch_impleme
 | 2026-09-23 | Section 7: MCP servers (logintel, mantis-tools, jenkins; microsoft365 off) with the opencode curation plus `resources/prompts: false`; plugin `mcp-ask-first` (approve in CLI/ACP, block in -z/-q/cron), verified via `-z`, `chat -q` and a scripted ACP client; keys renamed to the installer names; model chain measured per key from `model-preferences.yaml` (lessons of the log-intel LLM adapter) after the gateway refused glm-5.3 and deepseek to the personal key; hourly `--adapt` cron; folder turned into the `hermes_installer` repo, tested fresh / partial tokens / this VM. |
 | 2026-10-19 | DeepSeek V4.1 Flash first in both prefer lists (user decision; the same switch on the Log Intelligence server and in opencode_installer); fragment default `deepseek-v4.1-flash`; chain re-measured on this VM (§7.4). |
 | 2026-10-19 (evening) | §7.4a: plugin `chain-adapt` (re-measure at once on a permanent refusal, one notice per re-measured chain at session start), `adapt-status.json`, cron every 15 min, `--adapt --cron`. |
+| 2026-11-13 | §7.4b: gateway roles. The gateway replaced every model id by tiers (`ember` / `flare` / `inferno`); the prefer lists ask the gateway for `"@default"` / `"@small"` (`GET /v1/client-config`) instead of naming a model and skip an id `/v1/models` no longer lists; fragment default `flare`, fallback 1 `ember` on the second key; chain on this VM: `flare` → Qwen. |

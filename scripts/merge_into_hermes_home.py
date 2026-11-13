@@ -273,18 +273,74 @@ def probe_model(base_url, key, model):
     return "refused", f"HTTP {status}: {reason}"
 
 
+ROLE_PREFIX = "@"
+
+
+def gateway_roles(base_url, key):
+    """({role: model id}, advertised gateway host or None) for this key, from the gateway's own
+    client configuration (GET <base_url>/client-config). ({}, None) when the endpoint is missing
+    or cannot be reached (the local Qwen server has none).
+
+    The gateway renames and re-points models without notice (2026-11: the glm/deepseek ids became
+    the tiers ember / flare / inferno), and publishes per key what it should run. default =
+    tau.default_model, else the "sonnet" alias (the everyday tier); small = tau.small_model, else
+    the "haiku" alias (background work); deep = the "fable" alias when it is a model of its own;
+    every published alias (haiku, sonnet, opus, fable) is a role too. A role whose model the key cannot reach (not in the config's model list) is dropped."""
+    status, body = gateway_request(f"{base_url}/client-config", key, timeout=20)
+    if status != 200 or not isinstance(body, dict):
+        return {}, None
+    aliases = body.get("aliases") if isinstance(body.get("aliases"), dict) else {}
+    tau = body.get("tau") if isinstance(body.get("tau"), dict) else {}
+    roles = {str(name): model for name, model in aliases.items() if isinstance(model, str) and model}
+    default_model = tau.get("default_model") or aliases.get("sonnet")
+    small_model = tau.get("small_model") or aliases.get("haiku")
+    if isinstance(default_model, str) and default_model:
+        roles["default"] = default_model
+    if isinstance(small_model, str) and small_model:
+        roles["small"] = small_model
+    # deep = the "fable" alias when it is a model of its own: a key that cannot reach the deep
+    # tier gets fable -> the small model from the gateway, and that is not a deep model.
+    deep_model = aliases.get("fable")
+    if isinstance(deep_model, str) and deep_model and deep_model not in (default_model, small_model):
+        roles["deep"] = deep_model
+    reachable = {item.get("id") for item in (body.get("models") or []) if isinstance(item, dict)}
+    if reachable:
+        roles = {name: model for name, model in roles.items() if model in reachable}
+    gateway_host = body.get("gateway") if isinstance(body.get("gateway"), str) else None
+    return roles, gateway_host
+
+
+def expand_preferences(prefer, roles):
+    """The prefer list with every "@role" replaced by the model the gateway names for it
+    (unresolved roles dropped, duplicates removed, order kept)."""
+    expanded = []
+    for entry in prefer:
+        entry = str(entry)
+        model = roles.get(entry[len(ROLE_PREFIX):]) if entry.startswith(ROLE_PREFIX) else entry
+        if model and model not in expanded:
+            expanded.append(model)
+    return expanded
+
+
+def host_of(url):
+    return str(url).split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0].lower()
+
+
 def adapt_chain(preferences_path, fragment, config, env, details=None):
     """The measured chain. ``details`` (a dict) receives what the plugin chain-adapt and the
     status file show: refused models with reasons and new models per key."""
     with open(preferences_path, encoding="utf-8") as preferences_file:
         preferences = round_trip_yaml().load(preferences_file)
-    known = {model for account in preferences["accounts"] for model in account["prefer"]}
+    known = {str(model) for account in preferences["accounts"] for model in account["prefer"]
+             if not str(model).startswith(ROLE_PREFIX)}
     not_chat = [pattern.lower() for pattern in preferences.get("not_chat_patterns") or []]
     current = chain_in_config(config)
     chosen, used = [], set()
     details = details if details is not None else {}
     details.setdefault("refused", {})
     details.setdefault("new_models", {})
+    details.setdefault("gateway_roles", {})
+    details.setdefault("gateway_advertised", {})
     for account in preferences["accounts"]:
         key_name, base_url, take = account["key"], account["base_url"], int(account.get("take", 1))
         if not has_value(env, key_name):
@@ -300,10 +356,27 @@ def adapt_chain(preferences_path, fragment, config, env, details=None):
             continue
         listed = [item.get("id") for item in (body.get("data") or []) if isinstance(item, dict)]
         picks = []
-        for model in account["prefer"]:
+        wants_roles = any(str(entry).startswith(ROLE_PREFIX) for entry in account["prefer"])
+        roles, gateway_host = gateway_roles(base_url, env[key_name]) if wants_roles else ({}, None)
+        if wants_roles:
+            details["gateway_roles"][key_name] = roles
+            print(f"    {key_name}: gateway roles " + (", ".join(f"@{name}={model}" for name, model in sorted(roles.items()))
+                                                     or "not published, using the literal ids"))
+            if gateway_host and gateway_host != host_of(base_url):
+                details["gateway_advertised"][key_name] = gateway_host
+                print(f"    {key_name}: note: the gateway names itself {gateway_host}; this key calls {host_of(base_url)}")
+        known.update(roles.values())
+        for model in expand_preferences(account["prefer"], roles):
             if len(picks) >= take:
                 break
             if (base_url, model) in used:   # Hermes skips a second link to the same deployment
+                continue
+            if listed and model not in listed:
+                # An id the gateway no longer lists can keep answering for a while as an alias of
+                # another model and then turn into a 403 (deepseek-v4.1-flash, 2026-11-13: served
+                # by mimo-v2.6-pro for about half an hour, then refused). Never build on one.
+                print(f"    {key_name:<24} {model:<24} not listed by the gateway, skipped")
+                details["refused"][f"{key_name}/{model}"] = "not listed by the gateway"
                 continue
             result, reason = probe_model(base_url, env[key_name], model)
             print(f"    {key_name:<24} {model:<24} {result}{' (' + reason + ')' if reason else ''}")
@@ -429,8 +502,11 @@ def write_status(hermes_home, chain, details):
         "chain": chain_links,
         "refused": details.get("refused") or {},
         "new_models": new_models,
+        "gateway_roles": details.get("gateway_roles") or {},
+        "gateway_advertised": details.get("gateway_advertised") or {},
         "adapt_command": [os.path.join(repo_dir, "install.sh"), "--adapt"],
-        "adopt_hint": "add a new model to its key's prefer list in config/model-preferences.yaml, then run install.sh --adapt",
+        "adopt_hint": "add a new model to its key's prefer list in config/model-preferences.yaml, then run install.sh --adapt"
+                      " (an \"@default\" / \"@small\" entry follows the gateway's own choice with no edit)",
     }
     with open(status_path + ".tmp", "w", encoding="utf-8") as handle:
         json.dump(status, handle, indent=2)
