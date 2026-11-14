@@ -24,7 +24,7 @@ related:
 | 主机 | `all-in-one-node16`，`10.96.234.11`（来自 Log Intelligence 的 `node_ip_mappings`） |
 | 系统 | Ubuntu 24.04 LTS，内核 6.8.0-60，用户 `fosqa` |
 | 安装前 | 没有 Node.js、没有 npm、没有 opencode、没有 Hermes；有 `python3` 3.12、`git`、`curl`、`crontab`，以及 VS Code 服务器（5 个版本） |
-| 网络 | GitHub（HTTPS，以及以 `bruceyu777` 身份的 SSH）、npm 仓库、`fos-ai.fortinet.com`、`releaseqa-aiserver` 均可访问 |
+| 网络 | GitHub（HTTPS，以及以 `bruceyu777` 身份的 SSH）、npm 仓库、`fos-exp-ai.corp.fortinet.com`、`releaseqa-aiserver` 均可访问 |
 | 磁盘 | 剩余 58 GB |
 
 开始前用同样的方式检查新机器：
@@ -32,7 +32,7 @@ related:
 ```bash
 for c in node npm python3 curl git crontab; do printf '%-8s %s\n' $c "$(command -v $c || echo MISSING)"; done
 ssh -T git@github.com                     # "Hi <you>!" = 可以克隆私有仓库
-curl -s -o /dev/null -w "fos-ai:%{http_code}\n" https://fos-ai.fortinet.com/v1/models        # 401 = 可访问
+curl -s -o /dev/null -w "fos-ai:%{http_code}\n" https://fos-exp-ai.corp.fortinet.com/v1/models        # 401 = 可访问
 curl -s -o /dev/null -w "qwen:%{http_code}\n"   https://releaseqa-aiserver.corp.fortinet.com/v1/models
 df -h ~
 ```

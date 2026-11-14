@@ -21,13 +21,13 @@
 model:
   default: flare
   provider: custom
-  base_url: https://fos-ai.fortinet.com/v1
+  base_url: https://fos-exp-ai.corp.fortinet.com/v1
   api_key: ${FOS_AI_API_KEY}
 
 fallback_providers:
   - provider: custom
     model: ember
-    base_url: https://fos-ai.fortinet.com/v1
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
     key_env: FOS_AI_FALLBACK_API_KEY
   - provider: custom
     model: qwen3.6-35b-a3b

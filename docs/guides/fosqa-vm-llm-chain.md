@@ -389,11 +389,11 @@ reach). The prefer lists ask for that instead of naming a model:
 ```yaml
 accounts:
   - key: FOS_AI_API_KEY               # personal fos-ai key: primary
-    base_url: https://fos-ai.fortinet.com/v1
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
     take: 1
     prefer: ["@default", flare, "@small", ember]
   - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
-    base_url: https://fos-ai.fortinet.com/v1
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
     take: 1
     prefer: ["@default", flare, "@small", ember]
 ```
@@ -415,6 +415,14 @@ re-pointed default now needs no edit in this repo. Measured on this VM: `flare
 (FOS_AI_API_KEY) → qwen3.6-35b-a3b → qwen3.5-122b-a10b-awq`; off hours the project key adds
 `ember` after `flare`.
 
+**Base URL (2026-11-13, evening).** Both fos-ai keys now call the host the gateway names for
+itself, `https://fos-exp-ai.corp.fortinet.com/v1` (`config/model-preferences.yaml`,
+`config/config.yaml`). Measured the same day: both hosts give both keys the same roles, model
+list and answers; the new host has a public certificate valid to 2027-04, the certificate of
+the older name `fos-ai.fortinet.com` expires on 2026-12-25. `./install.sh --adapt` writes the
+new address into `~/.hermes/config.yaml`; no full reinstall is needed. To go back, restore the
+address in the two files and run `--adapt` once.
+
 ### 7.5 Installer tests
 
 | Scenario | Result |
@@ -433,3 +441,4 @@ re-pointed default now needs no edit in this repo. Measured on this VM: `flare
 | 2026-10-19 | DeepSeek V4.1 Flash first in both prefer lists (user decision; the same switch on the Log Intelligence server and in opencode_installer); fragment default `deepseek-v4.1-flash`; chain re-measured on this VM (§7.4). |
 | 2026-10-19 (evening) | §7.4a: plugin `chain-adapt` (re-measure at once on a permanent refusal, one notice per re-measured chain at session start), `adapt-status.json`, cron every 15 min, `--adapt --cron`. |
 | 2026-11-13 | §7.4b: gateway roles. The gateway replaced every model id by tiers (`ember` / `flare` / `inferno`); the prefer lists ask the gateway for `"@default"` / `"@small"` (`GET /v1/client-config`) instead of naming a model and skip an id `/v1/models` no longer lists; fragment default `flare`, fallback 1 `ember` on the second key; chain on this VM: `flare` → Qwen. |
+| 2026-11-13 (evening) | Base URL of both fos-ai keys moved to `https://fos-exp-ai.corp.fortinet.com/v1`, the host the gateway names for itself (§7.4b). |

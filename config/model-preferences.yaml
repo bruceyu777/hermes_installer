@@ -34,11 +34,11 @@
 
 accounts:
   - key: FOS_AI_API_KEY               # personal fos-ai key: primary
-    base_url: https://fos-ai.fortinet.com/v1
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
     take: 1
     prefer: ["@default", flare, "@small", ember]
   - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
-    base_url: https://fos-ai.fortinet.com/v1
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
     take: 1
     prefer: ["@default", flare, "@small", ember]
   - key: LOCAL_QWEN_API_KEY           # internal Qwen gateway: last resort

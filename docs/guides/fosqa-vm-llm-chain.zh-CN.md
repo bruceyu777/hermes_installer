@@ -358,11 +358,11 @@ VS Code 侧与 `vscode-acp.zh-CN.md` 相同，命令为 `/home/fosqa/.local/bin/
 ```yaml
 accounts:
   - key: FOS_AI_API_KEY               # personal fos-ai key: primary
-    base_url: https://fos-ai.fortinet.com/v1
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
     take: 1
     prefer: ["@default", flare, "@small", ember]
   - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
-    base_url: https://fos-ai.fortinet.com/v1
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
     take: 1
     prefer: ["@default", flare, "@small", ember]
 ```
@@ -380,6 +380,12 @@ accounts:
 base URL 和模型都与前面某一环相同的回退，所以第二个 key 不能重复 `flare`，会使用小档位。以后默认模型改名
 或换指向，本仓库都不需要修改。本虚拟机测得：`flare (FOS_AI_API_KEY) → qwen3.6-35b-a3b →
 qwen3.5-122b-a10b-awq`；非工作时间项目 key 会在 `flare` 之后加上 `ember`。
+
+**Base URL（2026-11-13 晚）。** 两个 fos-ai key 的 `base_url` 已改为网关自称的主机
+`https://fos-exp-ai.corp.fortinet.com/v1`（`config/model-preferences.yaml`、`config/config.yaml`）。
+同一天实测：两个主机对两个 key 返回相同的角色、模型列表和应答；新主机使用公共证书（有效期至
+2027-04），旧主机 `fos-ai.fortinet.com` 的证书 2026-12-25 到期。`./install.sh --adapt` 会把新地址写入
+`~/.hermes/config.yaml`，无需完整重装。回退：把两个文件里的地址改回去，再执行一次 `--adapt`。
 
 ### 7.5 安装脚本测试
 
@@ -399,3 +405,4 @@ qwen3.5-122b-a10b-awq`；非工作时间项目 key 会在 `flare` 之后加上 `
 | 2026-10-19 | 两个 `prefer` 列表都以 DeepSeek V4.1 Flash 开头（用户决定；Log Intelligence 服务端和 opencode_installer 同步切换）；片段默认模型 `deepseek-v4.1-flash`；本虚拟机重新测量了链（§7.4）。 |
 | 2026-10-19（晚） | §7.4a：插件 `chain-adapt`（永久拒绝时立即重新测量，会话开始时每次链变化提示一次）、`adapt-status.json`、cron 每 15 分钟、`--adapt --cron`。 |
 | 2026-11-13 | §7.4b：网关角色。网关把所有模型 id 换成了档位（`ember` / `flare` / `inferno`）；prefer 列表改为向网关询问 `"@default"` / `"@small"`（`GET /v1/client-config`），不再写模型名，并跳过 `/v1/models` 不再列出的 id；片段默认模型 `flare`，第二个 key 的回退 1 为 `ember`；本虚拟机的链：`flare` → Qwen。 |
+| 2026-11-13（晚） | 两个 fos-ai key 的 base URL 改为网关自称的主机 `https://fos-exp-ai.corp.fortinet.com/v1`（§7.4b）。 |

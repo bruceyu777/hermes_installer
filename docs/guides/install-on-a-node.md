@@ -25,7 +25,7 @@ everything that was worth knowing afterwards.
 | Host | `all-in-one-node16`, `10.96.234.11` (from Log Intelligence's `node_ip_mappings`) |
 | OS | Ubuntu 24.04 LTS, kernel 6.8.0-60, user `fosqa` |
 | Before | no Node.js, no npm, no opencode, no Hermes, `python3` 3.12, `git`, `curl`, `crontab`, a VS Code server (5 versions) |
-| Network | GitHub (HTTPS and SSH as `bruceyu777`), npm registry, `fos-ai.fortinet.com`, `releaseqa-aiserver` all reachable |
+| Network | GitHub (HTTPS and SSH as `bruceyu777`), npm registry, `fos-exp-ai.corp.fortinet.com`, `releaseqa-aiserver` all reachable |
 | Disk | 58 GB free |
 
 Check a new machine the same way before you start:
@@ -33,7 +33,7 @@ Check a new machine the same way before you start:
 ```bash
 for c in node npm python3 curl git crontab; do printf '%-8s %s\n' $c "$(command -v $c || echo MISSING)"; done
 ssh -T git@github.com                     # "Hi <you>!" = the private repos can be cloned
-curl -s -o /dev/null -w "fos-ai:%{http_code}\n" https://fos-ai.fortinet.com/v1/models        # 401 = reachable
+curl -s -o /dev/null -w "fos-ai:%{http_code}\n" https://fos-exp-ai.corp.fortinet.com/v1/models        # 401 = reachable
 curl -s -o /dev/null -w "qwen:%{http_code}\n"   https://releaseqa-aiserver.corp.fortinet.com/v1/models
 df -h ~
 ```
