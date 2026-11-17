@@ -448,6 +448,16 @@ Hermes reads `model.default` from `config.yaml` (mtime cache) for each new sessi
 re-measured chain needs no gateway restart. Verified: `hermes -p qa chat -Q -q …` answered by
 `flare`.
 
+**Fallback 1 on the personal key (2026-11-17, user decision).** The second key has no budget
+until 7 PM on most days, so the chain dropped from `flare` straight to Qwen. The personal key
+now takes 2 models, `["@default", flare, "@deep", inferno]`: daytime `flare` → `inferno` →
+`qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`, off hours `ember` from the second key joins after
+`inferno`. It takes `"@deep"` rather than `"@small"` so that the second key can still add
+`ember` (a model appears only once per gateway). Probed the same afternoon: the personal key
+answers `flare`, `ember`, `inferno` and `mimo-v2.6-pro`; the second key is out of budget for
+all of them and refused `inferno` (403). `install.sh --check`: all four links "gateway ok,
+Hermes PONG".
+
 ### 7.5 Installer tests
 
 | Scenario | Result |
@@ -467,4 +477,4 @@ re-measured chain needs no gateway restart. Verified: `hermes -p qa chat -Q -q �
 | 2026-10-19 (evening) | §7.4a: plugin `chain-adapt` (re-measure at once on a permanent refusal, one notice per re-measured chain at session start), `adapt-status.json`, cron every 15 min, `--adapt --cron`. |
 | 2026-11-13 | §7.4b: gateway roles. The gateway replaced every model id by tiers (`ember` / `flare` / `inferno`); the prefer lists ask the gateway for `"@default"` / `"@small"` (`GET /v1/client-config`) instead of naming a model and skip an id `/v1/models` no longer lists; fragment default `flare`, fallback 1 `ember` on the second key; chain on this VM: `flare` → Qwen. |
 | 2026-11-13 (evening) | Base URL of both fos-ai keys moved to `https://fos-exp-ai.corp.fortinet.com/v1`, the host the gateway names for itself (§7.4b). |
-| 2026-11-17 | §7.4c: office workstation stuck on Qwen (no cron, old prefer lists) brought to `flare` in `~/.hermes` and three profiles; `--cron` falls back to a systemd user timer when crontab is refused; `install.sh --adapt` rewrites the chain only (`--chain-only`), so profile overlays keep their MCP include lists. |
+| 2026-11-17 | §7.4c: office workstation stuck on Qwen (no cron, old prefer lists) brought to `flare` in `~/.hermes` and three profiles; `--cron` falls back to a systemd user timer when crontab is refused; `install.sh --adapt` rewrites the chain only (`--chain-only`), so profile overlays keep their MCP include lists. Later the same day: the personal key takes `"@deep"` (`inferno`) as fallback 1 (user decision). |

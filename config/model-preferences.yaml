@@ -31,13 +31,18 @@
 # Order = preference (2026-11-13: the everyday tier leads on both fos-ai keys). Hermes skips a
 # second link to the same model on the same gateway, so the second key cannot repeat "flare"
 # after the first key took it: it takes the small tier.
+# 2026-11-17 (user decision): the personal key also takes the hardest-problems tier as fallback 1,
+# so a fos-ai model backs up flare all day; the second key often has no budget until 7 PM, and
+# the chain used to drop from flare straight to Qwen. Daytime: flare -> inferno -> Qwen; off
+# hours: flare -> inferno -> ember (second key) -> Qwen. The personal key takes "@deep", not
+# "@small", so the second key can still add ember.
 
 accounts:
-  - key: FOS_AI_API_KEY               # personal fos-ai key: primary
+  - key: FOS_AI_API_KEY               # personal fos-ai key: primary + fallback 1
     base_url: https://fos-exp-ai.corp.fortinet.com/v1
-    take: 1
-    prefer: ["@default", flare, "@small", ember]
-  - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 1
+    take: 2
+    prefer: ["@default", flare, "@deep", inferno]
+  - key: FOS_AI_FALLBACK_API_KEY      # second fos-ai key (project token): fallback 2
     base_url: https://fos-exp-ai.corp.fortinet.com/v1
     take: 1
     prefer: ["@default", flare, "@small", ember]

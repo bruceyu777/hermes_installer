@@ -16,8 +16,9 @@
 # within hours; on 2026-10-19 deepseek-v4.1-flash came back; in 2026-11 every id was replaced by
 # the tiers ember / flare / inferno, which the gateway re-points to new models itself). The
 # prefer lists therefore start with the role "@default": the gateway names the model.
-# Fallback 1 is the small tier on purpose: Hermes drops a fallback whose base URL and model both
-# match an earlier link, so the second key must not repeat the primary's model.
+# Fallback 1 is the hardest-problems tier on the same personal key (2026-11-17), fallback 2 the
+# small tier on the second key: Hermes drops a fallback whose base URL and model both match an
+# earlier link, so no two fos-ai links may share a model.
 model:
   default: flare
   provider: custom
@@ -25,6 +26,10 @@ model:
   api_key: ${FOS_AI_API_KEY}
 
 fallback_providers:
+  - provider: custom
+    model: inferno
+    base_url: https://fos-exp-ai.corp.fortinet.com/v1
+    key_env: FOS_AI_API_KEY
   - provider: custom
     model: ember
     base_url: https://fos-exp-ai.corp.fortinet.com/v1

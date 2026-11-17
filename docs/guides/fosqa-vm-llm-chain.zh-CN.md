@@ -410,6 +410,14 @@ qwen3.5-122b-a10b-awq`；非工作时间项目 key 会在 `flare` 之后加上 `
 Hermes 在每个新会话时从 `config.yaml` 读取 `model.default`（按 mtime 缓存），所以重新测量的链
 不需要重启 gateway。已验证：`hermes -p qa chat -Q -q …` 由 `flare` 应答。
 
+**个人 key 的回退 1（2026-11-17，用户决定）。** 第二个 key 多数日子晚上 7 点前没有额度，链因此
+从 `flare` 直接落到 Qwen。现在个人 key 取 2 个模型，`["@default", flare, "@deep", inferno]`：
+白天为 `flare` → `inferno` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`，非工作时间第二个 key
+的 `ember` 接在 `inferno` 之后。个人 key 取 `"@deep"` 而不是 `"@small"`，是为了让第二个 key 仍能
+加上 `ember`（同一网关上一个模型只能出现一次）。同一下午探测：个人 key 对 `flare`、`ember`、
+`inferno`、`mimo-v2.6-pro` 都有应答；第二个 key 对这些模型都没有额度，并且拒绝 `inferno`（403）。
+`install.sh --check`：四个环节都是 "gateway ok, Hermes PONG"。
+
 ### 7.5 安装脚本测试
 
 | 场景 | 结果 |
@@ -429,4 +437,4 @@ Hermes 在每个新会话时从 `config.yaml` 读取 `model.default`（按 mtime
 | 2026-10-19（晚） | §7.4a：插件 `chain-adapt`（永久拒绝时立即重新测量，会话开始时每次链变化提示一次）、`adapt-status.json`、cron 每 15 分钟、`--adapt --cron`。 |
 | 2026-11-13 | §7.4b：网关角色。网关把所有模型 id 换成了档位（`ember` / `flare` / `inferno`）；prefer 列表改为向网关询问 `"@default"` / `"@small"`（`GET /v1/client-config`），不再写模型名，并跳过 `/v1/models` 不再列出的 id；片段默认模型 `flare`，第二个 key 的回退 1 为 `ember`；本虚拟机的链：`flare` → Qwen。 |
 | 2026-11-13（晚） | 两个 fos-ai key 的 base URL 改为网关自称的主机 `https://fos-exp-ai.corp.fortinet.com/v1`（§7.4b）。 |
-| 2026-11-17 | §7.4c：办公室工作站卡在 Qwen（没有 cron、prefer 列表过旧），`~/.hermes` 和三个 profile 已改为 `flare`；crontab 被拒时 `--cron` 改装 systemd 用户定时器；`install.sh --adapt` 只重写模型链（`--chain-only`），profile overlay 的 MCP include 列表得以保留。 |
+| 2026-11-17 | §7.4c：办公室工作站卡在 Qwen（没有 cron、prefer 列表过旧），`~/.hermes` 和三个 profile 已改为 `flare`；crontab 被拒时 `--cron` 改装 systemd 用户定时器；`install.sh --adapt` 只重写模型链（`--chain-only`），profile overlay 的 MCP include 列表得以保留。当天稍晚：个人 key 取 `"@deep"`（`inferno`）作为回退 1（用户决定）。 |
