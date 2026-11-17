@@ -142,7 +142,7 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 | `~/.hermes/plugins/mcp-ask-first/` | 复制 |
 | Telegram 网关（仅当有 `TELEGRAM_BOT_TOKEN`） | `hermes gateway install`（用户 unit `~/.config/systemd/user/hermes-gateway.service`，已启用，开 linger；已存在时不动），然后 `hermes gateway restart` 以读取新的 `.env` |
 | VS Code（如已安装） | 安装 ACP Client 扩展（`formulahendry.acp-client`），并添加使用 `hermes` 完整路径的 `acp.agents["Hermes Agent"]`（已有可用条目时不动） |
-| crontab（仅 `--cron`） | `2-59/15 * * * * … install.sh --adapt`，日志在 `~/.hermes/logs/hermes_installer_adapt.log` |
+| crontab（仅 `--cron`） | `2-59/15 * * * * … install.sh --adapt`，日志在 `~/.hermes/logs/hermes_installer_adapt.log`；crontab 被拒时改为同样时间表的 systemd 用户定时器 `hermes-adapt-<default\|profile>.timer` |
 | `~/.hermes/adapt-status.json` | 上次测量的结果：链、被拒绝的模型及原因、新出现的模型、插件运行的重新测量命令 |
 | `~/.hermes/plugins/chain-adapt/` | 模型被永久拒绝时重新测量链；会话开始时每次变化提示一次链和新模型 |
 | 检查 | 列出并连接 MCP 服务器，检查插件，有机器人 token 时向 `api.telegram.org` 验证它（只显示机器人名字）并显示服务和 Telegram 连接状态，再对模型链中每个模型做一次网关直连调用和一次 Hermes 对话（使用临时 home） |
@@ -150,7 +150,7 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 | 选项 | 作用 |
 |---|---|
 | `--adapt` | 只重新测量模型并改写模型链 |
-| `--cron` | 同时把每 15 分钟一次的 `--adapt` 加入 crontab（替换旧的时间表；与 `--adapt` 一起用时只做这一步） |
+| `--cron` | 同时每 15 分钟运行一次 `--adapt`：用 crontab，crontab 被拒时用 systemd 用户定时器（替换旧的时间表；与 `--adapt` 一起用时只做这一步）。`--adapt` 只重写模型链 |
 | `--check` | 只做检查 |
 | `--no-install` | 不动 Hermes 安装 |
 | `--no-vscode` | 不动 VS Code |

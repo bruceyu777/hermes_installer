@@ -399,7 +399,7 @@ def adapt_chain(preferences_path, fragment, config, env, details=None):
     return chosen
 
 
-def merge_config(fragment_path, hermes_home, preferences_path=None, dry_run=False):
+def merge_config(fragment_path, hermes_home, preferences_path=None, dry_run=False, chain_only=False):
     from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
     yaml = round_trip_yaml()
@@ -433,6 +433,16 @@ def merge_config(fragment_path, hermes_home, preferences_path=None, dry_run=Fals
         CommentedMap([("provider", "custom"), ("model", link["model"]), ("base_url", link["base_url"]),
                       ("key_env", link["token"])])
         for link in available[1:])
+
+    if chain_only:   # install.sh --adapt (cron / timer): the chain only. Re-merging the MCP servers
+        # here would wipe what a profile overlay added (config/profiles/*/overlay.yaml include
+        # lists) every 15 minutes; MCP and plugins follow the repo on a full ./install.sh.
+        buffer = io.StringIO()
+        yaml.dump(config, buffer)
+        write_if_changed(config_path, buffer.getvalue(), "config.yaml")
+        print("    chain: " + " -> ".join(f"{link['model']} ({link['token']})" for link in available))
+        write_status(hermes_home, available, details)
+        return
 
     # MCP servers: this repo's entries are replaced, servers of your own are kept.
     servers = config.get("mcp_servers")
@@ -527,6 +537,8 @@ def main():
         if name == "adapt":
             command_parser.add_argument("--preferences", required=True)
             command_parser.add_argument("--dry-run", action="store_true")
+            command_parser.add_argument("--chain-only", action="store_true",
+                                        help="rewrite model + fallback_providers only (install.sh --adapt)")
     chain_parser = subcommands.add_parser("chain")
     chain_parser.add_argument("--hermes-home", required=True)
     arguments = parser.parse_args()
@@ -539,7 +551,8 @@ def main():
     elif arguments.command == "config":
         merge_config(arguments.fragment, arguments.hermes_home)
     else:
-        merge_config(arguments.fragment, arguments.hermes_home, arguments.preferences, arguments.dry_run)
+        merge_config(arguments.fragment, arguments.hermes_home, arguments.preferences, arguments.dry_run,
+                     arguments.chain_only)
 
 
 if __name__ == "__main__":

@@ -160,7 +160,7 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 | `~/.hermes/plugins/mcp-ask-first/` | copied |
 | Telegram gateway (only with a `TELEGRAM_BOT_TOKEN`) | `hermes gateway install` (user unit `~/.config/systemd/user/hermes-gateway.service`, enabled, linger on; no-op when it exists), then `hermes gateway restart` so it reads the new `.env` |
 | VS Code, if present | installs the ACP Client extension (`formulahendry.acp-client`) and adds `acp.agents["Hermes Agent"]` with the full path of `hermes`, unless a working entry exists |
-| crontab (`--cron` only) | `2-59/15 * * * * … install.sh --adapt`, log in `~/.hermes/logs/hermes_installer_adapt.log` |
+| crontab (`--cron` only) | `2-59/15 * * * * … install.sh --adapt`, log in `~/.hermes/logs/hermes_installer_adapt.log`; where crontab is refused, a systemd user timer `hermes-adapt-<default\|profile>.timer` on the same schedule |
 | `~/.hermes/adapt-status.json` | what the last re-measure found: chain, refused models with reasons, new models seen, the re-measure command the plugin runs |
 | `~/.hermes/plugins/chain-adapt/` | re-measures the chain when a model is refused for good; prints the chain and the new models once per change at session start |
 | Check | lists and connects the MCP servers, checks the plugins, with a bot token validates it against `api.telegram.org` (bot name only) and shows the service and Telegram connection state, then for each model of the chain a direct gateway call and one Hermes prompt from a throwaway home |
@@ -168,7 +168,7 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
 | Option | Effect |
 |---|---|
 | `--adapt` | only re-measure the models and rewrite the chain |
-| `--cron` | also put `--adapt` in your crontab every 15 minutes (replaces an older schedule; with `--adapt`: only that) |
+| `--cron` | also run `--adapt` every 15 minutes: crontab, or a systemd user timer when crontab is refused (replaces an older schedule; with `--adapt`: only that). `--adapt` rewrites the model chain only |
 | `--check` | only run the check |
 | `--no-install` | leave the Hermes install alone |
 | `--no-vscode` | leave VS Code alone |

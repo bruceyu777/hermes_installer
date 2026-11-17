@@ -19,7 +19,7 @@
 #   --no-check      skip the verification at the end
 #   --check         only run the verification
 #   --adapt         only probe the models and update the chain in config.yaml
-#   --cron          also put `install.sh --adapt` in your crontab every 15 min (idempotent; with --adapt: only that)
+#   --cron          also run `install.sh --adapt` every 15 min: crontab, or a systemd user timer when crontab is refused (idempotent; with --adapt: only that)
 #
 # Works on $HERMES_HOME (default ~/.hermes). Safe to re-run after every `git pull`:
 # tokens already in $HERMES_HOME/.env are kept unless tokens.env gives a new value.
@@ -173,9 +173,9 @@ deploy_config() {
 
 # The chain is measured, not fixed: every key gets a one-token chat probe and the chain is
 # built from the prefer lists in config/model-preferences.yaml (see the comment there).
-adapt_models() {
+adapt_models() {   # $1 = --chain-only (install.sh --adapt): leave MCP servers and plugins as they are
   info "probing the models each key can call now:"
-  "$HERMES_PYTHON" "$HELPER" adapt --preferences "$PREFERENCES" --fragment "$FRAGMENT" --hermes-home "$HERMES_HOME"
+  "$HERMES_PYTHON" "$HELPER" adapt --preferences "$PREFERENCES" --fragment "$FRAGMENT" --hermes-home "$HERMES_HOME" "$@"
 }
 
 # ── 2b. this host, the other hosts, the profile ──────────────────────────────
@@ -215,10 +215,53 @@ install_cron() {
   current="$(crontab -l 2>/dev/null || true)"
   if printf '%s\n' "$current" | grep -qxF "$line"; then
     info "already in your crontab"
-  else
-    ( printf '%s\n' "$current" | grep -vF "HERMES_HOME=$HERMES_HOME $marker" || true; printf '%s\n' "$line" ) | grep -v '^$' | crontab -
+  elif ( printf '%s\n' "$current" | grep -vF "HERMES_HOME=$HERMES_HOME $marker" || true; printf '%s\n' "$line" ) | grep -v '^$' | crontab - 2>/dev/null; then
     info "installed: $line"
+  else
+    info "crontab refused (e.g. /etc/cron.allow leaves out a domain account): systemd user timer instead"
+    install_adapt_timer "$log"
   fi
+}
+
+# The same schedule as a systemd user timer, one per HERMES_HOME (2026-11-17: the office
+# workstation's domain account may not use crontab). Units go to ~/.config/systemd/user
+# literally, not $XDG_CONFIG_HOME: a shell inside the VS Code snap points that elsewhere.
+install_adapt_timer() {
+  local log="$1" name unit_dir="$HOME/.config/systemd/user"
+  if ! systemctl --user show-environment >/dev/null 2>&1; then
+    warn "no systemd user manager either: run '$REPO_DIR/install.sh --adapt' by hand when the gateway changes models"
+    return 0
+  fi
+  if [ -n "$PROFILE" ]; then name="hermes-adapt-$PROFILE"
+  elif [ "$HERMES_HOME" = "$HOME/.hermes" ]; then name="hermes-adapt-default"
+  else name="hermes-adapt-$(printf '%s' "$HERMES_HOME" | md5sum | cut -c1-8)"
+  fi
+  mkdir -p "$unit_dir"
+  cat > "$unit_dir/$name.service" <<EOF
+[Unit]
+Description=Hermes model chain re-measure for $HERMES_HOME (hermes_installer install.sh --adapt)
+
+[Service]
+Type=oneshot
+Environment=HERMES_HOME=$HERMES_HOME
+ExecStart=/bin/sh -c 'exec "$REPO_DIR/install.sh" --adapt >> "$log" 2>&1'
+EOF
+  cat > "$unit_dir/$name.timer" <<EOF
+[Unit]
+Description=Re-measure the Hermes model chain for $HERMES_HOME every 15 minutes
+
+[Timer]
+OnCalendar=*:02/15
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$name.timer" >/dev/null 2>&1
+  info "installed: systemd user timer $name.timer (minutes 02/17/32/47; log $log)"
+  info "remove with: systemctl --user disable --now $name.timer; rm $unit_dir/$name.{service,timer}"
 }
 
 # ── 3. VS Code ────────────────────────────────────────────────────────────────
@@ -455,7 +498,7 @@ PY
 if [ "$ADAPT_ONLY" = 1 ]; then
   find_hermes_python
   say "Models -> $HERMES_HOME/config.yaml ($(date '+%F %T'))"
-  adapt_models
+  adapt_models --chain-only
   [ "$DO_CRON" = 1 ] && install_cron   # --adapt --cron: re-measure and (re)install the schedule
   exit 0
 fi

@@ -2,7 +2,7 @@
 title: Hermes Agent on the fosqa VM: update to v0.21.4 and the three-tier LLM chain (fos-ai personal → fos-ai project → local Qwen)
 kind: guide
 created: 2026-09-22
-updated: 2026-11-13
+updated: 2026-11-17
 status: current
 verified_against: Hermes Agent v0.21.4 (upstream c0d7294769, 2026-09-23), Ubuntu 24.04 LTS (kernel 6.8.0-60), Python 3.11 venv under ~/.hermes/hermes-agent/venv, live one-shot runs on 2026-09-22
 summary: How the pre-existing May install on the fosqa VM was brought to v0.21.4 and configured so glm-5.3 on the personal fos-ai token is primary, deepseek-v4.1-flash on the Log Intelligence project token is fallback 1, and the internal Qwen gateway is fallback 2/3, with every key kept in ~/.hermes/.env and each leg verified.
@@ -423,6 +423,31 @@ the older name `fos-ai.fortinet.com` expires on 2026-12-25. `./install.sh --adap
 new address into `~/.hermes/config.yaml`; no full reinstall is needed. To go back, restore the
 address in the two files and run `--adapt` once.
 
+### 7.4c 2026-11-17: `--adapt` changes the chain only; systemd timer when cron is refused
+
+Seen on the office workstation (`~/.hermes` plus the profiles `engineering`, `office`, `qa`):
+
+- **Stuck on Qwen.** The chain there was last measured on 2026-11-13 with the old prefer lists:
+  every fos-ai id was refused, so the chain fell to Qwen. Qwen kept answering, so `chain-adapt`
+  never fired again, and there was no cron. Fix: `git pull`, then `./install.sh --adapt --cron`
+  for `~/.hermes` and `./install.sh --profile NAME --adapt --cron` for each profile. Chain
+  everywhere: `flare` → `qwen3.6-35b-a3b` → `qwen3.5-122b-a10b-awq`.
+- **Cron refused.** That host's `/etc/cron.allow` leaves out the domain account. `--cron` now
+  falls back to a systemd user timer per `HERMES_HOME`: `hermes-adapt-default.timer`, or
+  `hermes-adapt-<profile>.timer`, at minutes 02/17/32/47 (60 s random delay), with the same log
+  file. Units are in `~/.config/systemd/user/`. Check with `systemctl --user list-timers 'hermes-adapt-*'`.
+- **Profile overlays wiped.** `--adapt` used to re-apply this repo's MCP server entries as well,
+  which dropped the tool include lists a profile overlay adds (`config/profiles/*/overlay.yaml`):
+  `qa` lost 18 mantis-tools tools. With a 15-minute schedule, that would happen on every run.
+  `install.sh --adapt` now passes `--chain-only` to the helper and rewrites only `model` and
+  `fallback_providers`. MCP servers and plugins follow the repo on a full `./install.sh`, as
+  before. The three profiles were restored from the backups adapt had taken and re-adapted;
+  apart from the chain, their parsed YAML is identical to before.
+
+Hermes reads `model.default` from `config.yaml` (mtime cache) for each new session, so a
+re-measured chain needs no gateway restart. Verified: `hermes -p qa chat -Q -q …` answered by
+`flare`.
+
 ### 7.5 Installer tests
 
 | Scenario | Result |
@@ -442,3 +467,4 @@ address in the two files and run `--adapt` once.
 | 2026-10-19 (evening) | §7.4a: plugin `chain-adapt` (re-measure at once on a permanent refusal, one notice per re-measured chain at session start), `adapt-status.json`, cron every 15 min, `--adapt --cron`. |
 | 2026-11-13 | §7.4b: gateway roles. The gateway replaced every model id by tiers (`ember` / `flare` / `inferno`); the prefer lists ask the gateway for `"@default"` / `"@small"` (`GET /v1/client-config`) instead of naming a model and skip an id `/v1/models` no longer lists; fragment default `flare`, fallback 1 `ember` on the second key; chain on this VM: `flare` → Qwen. |
 | 2026-11-13 (evening) | Base URL of both fos-ai keys moved to `https://fos-exp-ai.corp.fortinet.com/v1`, the host the gateway names for itself (§7.4b). |
+| 2026-11-17 | §7.4c: office workstation stuck on Qwen (no cron, old prefer lists) brought to `flare` in `~/.hermes` and three profiles; `--cron` falls back to a systemd user timer when crontab is refused; `install.sh --adapt` rewrites the chain only (`--chain-only`), so profile overlays keep their MCP include lists. |

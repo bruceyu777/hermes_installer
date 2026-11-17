@@ -2,7 +2,7 @@
 title: fosqa 虚拟机上的 Hermes Agent：升级到 v0.21.4 与三级 LLM 链（fos-ai 个人令牌 → fos-ai 项目令牌 → 本地 Qwen）
 kind: guide
 created: 2026-09-22
-updated: 2026-11-13
+updated: 2026-11-17
 status: current
 verified_against: Hermes Agent v0.21.4（上游 c0d7294769，2026-09-23），Ubuntu 24.04 LTS（内核 6.8.0-60），Python 3.11 venv 位于 ~/.hermes/hermes-agent/venv，2026-09-22 一次性运行实测
 summary: 记录 fosqa 虚拟机上 5 月遗留的安装如何升级到 v0.21.4，并配置为：个人 fos-ai 令牌上的 glm-5.3 为主模型，Log Intelligence 项目令牌上的 deepseek-v4.1-flash 为回退 1，内部 Qwen 网关为回退 2/3；所有密钥只存放在 ~/.hermes/.env，每一级都经过验证。
@@ -387,6 +387,29 @@ qwen3.5-122b-a10b-awq`；非工作时间项目 key 会在 `flare` 之后加上 `
 2027-04），旧主机 `fos-ai.fortinet.com` 的证书 2026-12-25 到期。`./install.sh --adapt` 会把新地址写入
 `~/.hermes/config.yaml`，无需完整重装。回退：把两个文件里的地址改回去，再执行一次 `--adapt`。
 
+### 7.4c 2026-11-17：`--adapt` 只改模型链；cron 被拒时改用 systemd 定时器
+
+在办公室工作站（`~/.hermes` 以及 profile `engineering`、`office`、`qa`）上看到的问题：
+
+- **卡在 Qwen。** 该机的模型链上次测量是 2026-11-13，用的还是旧的 prefer 列表：所有 fos-ai id
+  都被拒，于是链落到 Qwen。Qwen 一直能应答，`chain-adapt` 不再触发，也没有 cron。修复：
+  `git pull`，然后对 `~/.hermes` 执行 `./install.sh --adapt --cron`，对每个 profile 执行
+  `./install.sh --profile NAME --adapt --cron`。各处的链：`flare` → `qwen3.6-35b-a3b` →
+  `qwen3.5-122b-a10b-awq`。
+- **cron 被拒。** 该机的 `/etc/cron.allow` 不包含域账号。`--cron` 现在会退而为每个
+  `HERMES_HOME` 安装一个 systemd 用户定时器：`hermes-adapt-default.timer` 或
+  `hermes-adapt-<profile>.timer`，在每小时第 02/17/32/47 分钟运行（随机延迟 60 秒），日志文件
+  不变。单元文件在 `~/.config/systemd/user/`。用 `systemctl --user list-timers 'hermes-adapt-*'` 查看。
+- **profile overlay 被冲掉。** 以前 `--adapt` 也会重新写入本仓库的 MCP 服务器条目，从而丢掉
+  profile overlay（`config/profiles/*/overlay.yaml`）加的工具 include 列表：`qa` 丢了 18 个
+  mantis-tools 工具。每 15 分钟运行一次的话，每次都会发生。现在 `install.sh --adapt` 给辅助
+  脚本传 `--chain-only`，只重写 `model` 和 `fallback_providers`。MCP 服务器和插件与以前一样，
+  在完整执行 `./install.sh` 时跟随仓库。三个 profile 已从 adapt 生成的备份恢复并重新 adapt；
+  除模型链外，解析后的 YAML 与之前完全一致。
+
+Hermes 在每个新会话时从 `config.yaml` 读取 `model.default`（按 mtime 缓存），所以重新测量的链
+不需要重启 gateway。已验证：`hermes -p qa chat -Q -q …` 由 `flare` 应答。
+
 ### 7.5 安装脚本测试
 
 | 场景 | 结果 |
@@ -406,3 +429,4 @@ qwen3.5-122b-a10b-awq`；非工作时间项目 key 会在 `flare` 之后加上 `
 | 2026-10-19（晚） | §7.4a：插件 `chain-adapt`（永久拒绝时立即重新测量，会话开始时每次链变化提示一次）、`adapt-status.json`、cron 每 15 分钟、`--adapt --cron`。 |
 | 2026-11-13 | §7.4b：网关角色。网关把所有模型 id 换成了档位（`ember` / `flare` / `inferno`）；prefer 列表改为向网关询问 `"@default"` / `"@small"`（`GET /v1/client-config`），不再写模型名，并跳过 `/v1/models` 不再列出的 id；片段默认模型 `flare`，第二个 key 的回退 1 为 `ember`；本虚拟机的链：`flare` → Qwen。 |
 | 2026-11-13（晚） | 两个 fos-ai key 的 base URL 改为网关自称的主机 `https://fos-exp-ai.corp.fortinet.com/v1`（§7.4b）。 |
+| 2026-11-17 | §7.4c：办公室工作站卡在 Qwen（没有 cron、prefer 列表过旧），`~/.hermes` 和三个 profile 已改为 `flare`；crontab 被拒时 `--cron` 改装 systemd 用户定时器；`install.sh --adapt` 只重写模型链（`--chain-only`），profile overlay 的 MCP include 列表得以保留。 |
