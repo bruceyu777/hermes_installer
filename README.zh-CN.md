@@ -107,7 +107,7 @@ hermes -z "问题"          # 问一个问题，打印回答后退出
 | 跟上网关变化 | 网关会不经通知地改变每个 key 能调用的模型。`./install.sh --adapt` 重新测量并改写模型链；`--cron` 让它每 15 分钟运行一次，插件 `chain-adapt` 在网关永久拒绝某个模型时（401/403/404、"does not permit"、"unknown model"）会立刻运行它，下一个会话就从能应答的模型开始。网关新出现的模型只会被报告（"new models seen"——在 adapt 日志、`~/.hermes/adapt-status.json` 里，以及在终端启动 `hermes` 时每次变化提示一次），加入 `prefer` 列表后才会使用。 |
 | 回退 | Hermes 内置的 `fallback_providers`：某个模型返回 401、403、404、429 或 5xx 时，本轮对话转到下一个模型。 |
 | MCP 服务器 | `jenkins`（10 个工具）、`mantis-tools`（8 个）、`logintel`（26 个只读工具）、`image-builds`（14 个只读工具：构建是否同步完成、镜像路径、最新 / GA 构建、release tag）、`microsoft365`（OAuth，可选，未测试）。这些服务器的其余工具对模型隐藏。 |
-| 防护 | 提交 Mantis bug、添加 Mantis 备注、发邮件、启动或重跑 Jenkins 构建前都会先询问（插件 [`mcp-ask-first`](config/plugins/mcp-ask-first/__init__.py)）。终端里是提示，VS Code 里是权限请求。无人应答的运行（`hermes -z`、`hermes chat -q`、cron）中直接拦截。 |
+| 防护 | 提交 Mantis bug、添加 Mantis 备注、发邮件、启动或重跑 Jenkins 构建前都会先询问（插件 [`mcp-ask-first`](config/plugins/mcp-ask-first/__init__.py)）。向 Oriole 提交测试结果的 shell 命令（`oriole_failed.py … post`、它的节点脚本、`oriole_resubmit.py`）也一样。终端里是提示，VS Code 里是权限请求。无人应答的运行（`hermes -z`、`hermes chat -q`、cron）中直接拦截。 |
 | 密钥 | `config.yaml` 中没有任何 token；全部在 `~/.hermes/.env`（权限 600）中，按名称引用。 |
 
 ## Token
@@ -187,7 +187,8 @@ Microsoft 365 不需要 token：在能打开浏览器的终端里运行一次 `h
 - **模型：** [config/model-preferences.yaml](config/model-preferences.yaml)。`config/config.yaml`
   中的模型链只是全新配置的起点。
 - **MCP 工具筛选** 与 Log Intelligence AI Assistant 和 opencode 配置保持一致（`config/config.yaml`
-  中的 `tools.include`、插件中的 `ASK_FIRST_TOOLS`），三处一起改。
+  中的 `tools.include`、插件中的 `ASK_FIRST_TOOLS`），三处一起改。需要先询问的 shell 命令在插件的
+  `ASK_FIRST_COMMANDS` 中，要与 opencode 配置里 `permission.bash` 的 `"ask"` 规则保持一致。
 - **升级 Hermes：** 先测试新版本，再修改 `install.sh` 中的 `TESTED_HERMES_VERSION` 和 `TESTED_HERMES_COMMIT`。
 - **切勿提交** `tokens.env`，`.gitignore` 已排除。
 

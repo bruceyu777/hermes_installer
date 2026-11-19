@@ -301,6 +301,22 @@ so a first version let a gated tool run in `-z`. The plugin therefore returns `b
 Hermes marks the run as having nobody to ask (`HERMES_SINGLE_QUERY_SESSION`, `-z` and `chat -q`;
 `HERMES_CRON_SESSION`).
 
+**Shell commands (2026-11-19).** Hermes' own dangerous-command check knows nothing about the lab
+tools, and a skill's write action can be a script instead of an MCP tool. The plugin therefore also
+matches `ASK_FIRST_COMMANDS` (regex, what the command does) against the `terminal` tool's `command`
+and the `execute_code` tool's `code`, and sends a match through the same gate. The rule key is the
+exact command, so "allow for this session" covers that one command and another command asks again.
+Listed: `oriole_failed.py … post`, `bash -s post` (its node script) and `oriole_resubmit.py`, the
+three ways the skill `fortistack-oriole-failed-results` can send test results to Oriole. Keep the
+list in step with the `permission.bash` `"ask"` rules of the opencode config.
+
+| Path (2026-11-19) | Result |
+|---|---|
+| `hermes -z`, `post` on a release that does not exist | "Not run: this shell command would send failed test results to Oriole, which needs the user's approval, …" before the script started |
+| `hermes -z`, a real request with results waiting | skill loaded, `dry` ran, `post` blocked, the agent reported the plan and stopped |
+| ACP, scripted client answering `deny` | one `session/request_permission` whose description holds the exact command; not run, model did not retry |
+| `dry` and `features` (read-only) | not gated |
+
 Verified 2026-09-23 with a copy of the plugin that also gated the harmless
 `logintel_list_projects`:
 
@@ -478,3 +494,4 @@ Hermes PONG".
 | 2026-11-13 | §7.4b: gateway roles. The gateway replaced every model id by tiers (`ember` / `flare` / `inferno`); the prefer lists ask the gateway for `"@default"` / `"@small"` (`GET /v1/client-config`) instead of naming a model and skip an id `/v1/models` no longer lists; fragment default `flare`, fallback 1 `ember` on the second key; chain on this VM: `flare` → Qwen. |
 | 2026-11-13 (evening) | Base URL of both fos-ai keys moved to `https://fos-exp-ai.corp.fortinet.com/v1`, the host the gateway names for itself (§7.4b). |
 | 2026-11-17 | §7.4c: office workstation stuck on Qwen (no cron, old prefer lists) brought to `flare` in `~/.hermes` and three profiles; `--cron` falls back to a systemd user timer when crontab is refused; `install.sh --adapt` rewrites the chain only (`--chain-only`), so profile overlays keep their MCP include lists. Later the same day: the personal key takes `"@deep"` (`inferno`) as fallback 1 (user decision). |
+| 2026-11-19 | §7.3: `mcp-ask-first` also gates shell commands (`ASK_FIRST_COMMANDS`, matched on `terminal` and `execute_code`): the three ways to send test results to Oriole. Verified with `-z` and a scripted ACP client answering `deny`. |

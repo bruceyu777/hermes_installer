@@ -284,6 +284,20 @@ VS Code 侧与 `vscode-acp.zh-CN.md` 相同，命令为 `/home/fosqa/.local/bin/
 `-z` 中放行了受控工具。因此当 Hermes 标记本次运行无人应答时（`HERMES_SINGLE_QUERY_SESSION`：`-z` 和
 `chat -q`；`HERMES_CRON_SESSION`），插件直接返回 `block`。
 
+**Shell 命令（2026-11-19）。** Hermes 自带的危险命令检查不认识实验室的工具，而技能的写操作可以是一个脚本，
+不一定是 MCP 工具。因此插件还会用 `ASK_FIRST_COMMANDS`（正则，命令的作用）匹配 `terminal` 工具的 `command`
+和 `execute_code` 工具的 `code`，匹配到就走同一个审批关口。规则键是完整的命令，所以“本次会话允许”只对这一条命令
+有效，换一条命令会再次询问。目前列入：`oriole_failed.py … post`、`bash -s post`（它的节点脚本）和
+`oriole_resubmit.py`，即技能 `fortistack-oriole-failed-results` 向 Oriole 提交测试结果的三种途径。
+这个列表要与 opencode 配置里 `permission.bash` 的 `"ask"` 规则保持一致。
+
+| 路径（2026-11-19） | 结果 |
+|---|---|
+| `hermes -z`，对一个不存在的版本执行 `post` | 脚本启动前即返回 “Not run: this shell command would send failed test results to Oriole, which needs the user's approval, …” |
+| `hermes -z`，有待提交结果的真实请求 | 加载技能，执行 `dry`，`post` 被拦截，agent 报告计划后停止 |
+| ACP，脚本客户端回答 `deny` | 一次 `session/request_permission`，描述里是完整命令；未执行，模型没有重试 |
+| `dry` 和 `features`（只读） | 不受控 |
+
 2026-09-23 用一个额外把无害的 `logintel_list_projects` 也设为受控的插件副本验证：
 
 | 路径 | 结果 |
@@ -438,3 +452,4 @@ Hermes 在每个新会话时从 `config.yaml` 读取 `model.default`（按 mtime
 | 2026-11-13 | §7.4b：网关角色。网关把所有模型 id 换成了档位（`ember` / `flare` / `inferno`）；prefer 列表改为向网关询问 `"@default"` / `"@small"`（`GET /v1/client-config`），不再写模型名，并跳过 `/v1/models` 不再列出的 id；片段默认模型 `flare`，第二个 key 的回退 1 为 `ember`；本虚拟机的链：`flare` → Qwen。 |
 | 2026-11-13（晚） | 两个 fos-ai key 的 base URL 改为网关自称的主机 `https://fos-exp-ai.corp.fortinet.com/v1`（§7.4b）。 |
 | 2026-11-17 | §7.4c：办公室工作站卡在 Qwen（没有 cron、prefer 列表过旧），`~/.hermes` 和三个 profile 已改为 `flare`；crontab 被拒时 `--cron` 改装 systemd 用户定时器；`install.sh --adapt` 只重写模型链（`--chain-only`），profile overlay 的 MCP include 列表得以保留。当天稍晚：个人 key 取 `"@deep"`（`inferno`）作为回退 1（用户决定）。 |
+| 2026-11-19 | §7.3：`mcp-ask-first` 也对 shell 命令先询问（`ASK_FIRST_COMMANDS`，匹配 `terminal` 和 `execute_code`）：向 Oriole 提交测试结果的三种途径。已用 `-z` 和回答 `deny` 的 ACP 脚本客户端验证。 |

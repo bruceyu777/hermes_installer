@@ -124,7 +124,7 @@ troubleshooting: [docs/guides/telegram.md](docs/guides/telegram.md).
 | Keeping up with the gateway | The gateway changes what each key may call without notice. `./install.sh --adapt` re-measures and rewrites the chain; `--cron` runs that every 15 minutes, and the plugin `chain-adapt` runs it at once when the gateway refuses a model for good (401/403/404, "does not permit", "unknown model"), so the next session starts on a model that answers. A model the gateway starts offering is only reported ("new models seen" — in the adapt log, in `~/.hermes/adapt-status.json`, and once per change as a notice when you start `hermes` in a terminal) until you add it to a `prefer` list. |
 | Fallback | Hermes' built-in `fallback_providers`. A 401, 403, 404, 429 or 5xx on one model moves the turn to the next. |
 | MCP servers | `jenkins` (10 tools), `mantis-tools` (8 tools), `logintel` (26 read-only tools), `image-builds` (14 read-only tools: is a build synced, image path, latest / GA build, release tags), `microsoft365` (OAuth, optional, untested). Other tools of those servers are hidden from the model. |
-| Guard rails | Filing a Mantis bug, adding a Mantis note, sending email, and starting or re-running a Jenkins build ask before running (plugin [`mcp-ask-first`](config/plugins/mcp-ask-first/__init__.py)). In the terminal it is a prompt; in VS Code a permission request. In runs with nobody to ask (`hermes -z`, `hermes chat -q`, cron) they are blocked. |
+| Guard rails | Filing a Mantis bug, adding a Mantis note, sending email, and starting or re-running a Jenkins build ask before running (plugin [`mcp-ask-first`](config/plugins/mcp-ask-first/__init__.py)). So do the shell commands that send test results to Oriole (`oriole_failed.py … post`, its node script, `oriole_resubmit.py`). In the terminal it is a prompt; in VS Code a permission request. In runs with nobody to ask (`hermes -z`, `hermes chat -q`, cron) they are blocked. |
 | Secrets | None in `config.yaml`. Every token is in `~/.hermes/.env` (mode 600) and referenced by name. |
 
 ## Tokens
@@ -208,7 +208,8 @@ To rotate a token, change it in `tokens.env` and run `./install.sh` again.
   `config/config.yaml` is only the starting point for a brand-new config.
 - **MCP tool curation** mirrors the Log Intelligence AI Assistant and the opencode config
   (`tools.include` in `config/config.yaml`, `ASK_FIRST_TOOLS` in the plugin). Change all
-  three together.
+  three together. Shell commands that must ask are `ASK_FIRST_COMMANDS` in the plugin; keep them
+  in step with the `permission.bash` `"ask"` rules of the opencode config.
 - **Hermes upgrades:** test the new version, then change `TESTED_HERMES_VERSION` and
   `TESTED_HERMES_COMMIT` in `install.sh`.
 - **Never commit** `tokens.env`. `.gitignore` excludes it.
