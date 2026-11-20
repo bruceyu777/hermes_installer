@@ -127,7 +127,8 @@ hosts:
       skills_repo: /home/fosqa/ai_practice/SKILLS      # cc_skills clone, copy mode (make pull / make push)
     # checked 2026-11-19: the log-intelligence-* compose stack runs; ~/.config/fortistack/env, sshpass and port 22
     # to the lab nodes (node2…node99) are all here, so fortistack node work is done from this host
-    capabilities: [docker, postgres, alembic, logintel-server, autolibv3, fortistack-node-login, local-qwen-gateway]
+    # MCP servers jenkins, mantis-tools, logintel, image-builds registered for Claude Code and opencode (checked 2026-11-19)
+    capabilities: [docker, postgres, alembic, logintel-server, autolibv3, fortistack-node-login, local-qwen-gateway, jenkins-mcp, mantis-mcp, logintel-mcp, image-builds-mcp]
     reaches: [cdn]
 
   guiauto1:
