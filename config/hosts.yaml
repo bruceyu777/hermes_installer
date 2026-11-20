@@ -28,6 +28,7 @@
 #   autolibv3              /home/fosqa/autolibv3 with autotest.py and its venv (compile / parse / rerun a script)
 #   fortistack-node-login  FORTISTACK_NODE_PASSWORD in ~/.config/fortistack/env + sshpass + port 22 to the lab nodes
 #   logintel-server        the log-intelligence checkout and its docker compose stack (code, DB, redeploy)
+#   qaai-replicas          the local QAAI portal / KB map / release-health replicas (pm2, :8080 :9999 :5000)
 # Measure reach with `scripts/render_host_context.py --probe` on the host itself; date what you record.
 
 schema_version: 1
@@ -56,7 +57,7 @@ hosts:
       hermes_home: ~/.hermes
       skills_shared: ~/git/cc_skills   # symlinked into ~/.claude/skills, shared with opencode and Hermes
       scratch: ~/tmp
-    capabilities: [internet, fos-ai-gateway, local-qwen-gateway, jenkins-mcp, mantis-mcp, logintel-mcp, image-builds-mcp, telegram-gateway, git-push, docker, vscode]
+    capabilities: [internet, fos-ai-gateway, local-qwen-gateway, jenkins-mcp, mantis-mcp, logintel-mcp, image-builds-mcp, telegram-gateway, git-push, docker, vscode, qaai-replicas]
     # not fortistack-node-login (2026-11-19): the lab nodes answer on port 22 from here, but ~/.config/fortistack/env
     # is missing; creating it (mode 600) would add the capability
     reaches: [office2, office3, cdn, log_intel_server, guiauto1, qaai, fgt1]
