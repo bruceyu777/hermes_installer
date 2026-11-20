@@ -18,10 +18,23 @@ Resolution order for the host name (first hit wins):
 A configured name that disagrees with auto-detection is used, with a warning (a tokens.env copied
 from another machine is the usual cause).
 
+Routing is by capability: a task in hosts.yaml either names its `host` or says what it `needs` (a
+capability); a skill says what it needs in its frontmatter (`metadata: {requires: [capability, ...]}`).
+HOST.md resolves each need to `here`, `ssh <alias>` (a host that has it and that this host reaches),
+or "not reachable from here". When a host moves or a second host gains a capability, only hosts.yaml
+changes.
+
+Other runtimes (Claude Code, opencode) get the same HOST.md with --host-md PATH, which writes only that
+file (no SOUL.md, no .env, no ssh config). An unknown host gets a fail-closed HOST.md: no identity,
+no delegation.
+
 Usage:
   scripts/render_host_context.py                       # HERMES_HOME from env or ~/.hermes
   scripts/render_host_context.py --host cdn --dry-run  # show what would be written
   scripts/render_host_context.py --check               # print the resolved host only, write nothing
+  scripts/render_host_context.py --host-md ~/.claude/HOST.md --skills-dir ~/.claude/skills
+  scripts/render_host_context.py --where fortistack-node-login   # one capability or task: here / ssh <alias> / none (exit 2)
+  scripts/render_host_context.py --probe               # measure tcp/ssh reach from here vs `reaches`; writes nothing
 """
 import argparse
 import os
@@ -98,7 +111,129 @@ def fmt_folders(f: dict) -> str:
     return " · ".join(f"{k} {v}" for k, v in (f or {}).items()) or "—"
 
 
-def render_host_md(me: str, data: dict, source: str) -> str:
+def caps(h: dict) -> list:
+    return h.get("capabilities") or []
+
+
+def task_hosts(task: dict, hosts: dict) -> list:
+    """The hosts a task may run on: its `host`, or every host whose capabilities include its `needs`."""
+    if task.get("host"):
+        return [task["host"]]
+    return [k for k, h in hosts.items() if task.get("needs") in caps(h)]
+
+
+def route(me: str, hosts: dict, need: str = "", candidates=None) -> tuple:
+    """('here', [me]) | ('ssh', [aliases this host reaches]) | ('none', [hosts that have it])."""
+    if candidates is None:
+        candidates = [k for k, h in hosts.items() if need in caps(h)]
+    if me in candidates:
+        return "here", [me]
+    near = [c for c in candidates if c in (hosts[me].get("reaches") or [])]
+    return ("ssh", near) if near else ("none", candidates)
+
+
+def fmt_route(kind: str, where: list) -> str:
+    if kind == "here":
+        return "**here**"
+    if kind == "ssh":
+        return " or ".join(f"`ssh {w}`" for w in where)
+    return "not reachable from here: hand it to the user" + (f" (has it: {', '.join(where)})" if where else " (no host has it)")
+
+
+def skill_requirements(dirs: list) -> list:
+    """(skill, [capability, ...]) for every <dir>/<skill>/SKILL.md whose frontmatter has metadata.requires."""
+    found = {}
+    for d in dirs:
+        for f in sorted(Path(d).expanduser().glob("*/SKILL.md")):
+            m = re.match(r"^---\n(.*?)\n---\n", f.read_text(encoding="utf-8", errors="replace"), re.S)
+            try:
+                fm = load_yaml(m.group(1)) if m else None
+            except Exception:
+                continue
+            meta = fm.get("metadata") if isinstance(fm, dict) else None
+            req = meta.get("requires") if isinstance(meta, dict) else None
+            if isinstance(req, str):
+                req = [r.strip() for r in req.split(",") if r.strip()]
+            if req:
+                found.setdefault(fm.get("name") or f.parent.name, [str(r) for r in req])
+    return sorted(found.items())
+
+
+def unknown_host_md(hosts_file: str, hosts: dict) -> str:
+    return "\n".join([
+        "# This host is not in the host list",
+        "",
+        f"hostname {socket.gethostname()}, ips {' '.join(local_ips())} match no entry in {hosts_file}.",
+        "This host has no identity: do not delegate anything to another host and do not assume any capability.",
+        "Work only with what is on this machine and say so. Fix: add the host to hosts.yaml",
+        f"(known: {', '.join(hosts)}) or re-render with --host NAME.",
+        ""])
+
+
+def ssh_target(alias: str) -> tuple:
+    """(hostname, port) that `ssh <alias>` would use, from `ssh -G` (no connection is made)."""
+    try:
+        out = subprocess.run(["ssh", "-G", alias], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return alias, 22
+    cfg = dict(l.split(" ", 1) for l in out.splitlines() if " " in l)
+    return cfg.get("hostname", alias), int(cfg.get("port", "22"))
+
+
+def ssh_aliases() -> set:
+    names = set()
+    ssh_dir = Path.home() / ".ssh"
+    for f in [ssh_dir / "config", *sorted((ssh_dir / "config.d").glob("*"))]:
+        if f.is_file():
+            for l in f.read_text(errors="replace").splitlines():
+                parts = l.split()
+                if len(parts) >= 2 and parts[0].lower() == "host":
+                    names.update(p for p in parts[1:] if "*" not in p and "?" not in p)
+    return names
+
+
+def tcp_open(host: str, port: int, timeout: float = 3.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def probe(me: str, hosts: dict) -> None:
+    """Measure, from this host, port reach and key login to every other host; compare with `reaches`. Read-only."""
+    declared = set(hosts[me].get("reaches") or [])
+    aliases = ssh_aliases()
+    rows, notes = [], []
+    for k, h in hosts.items():
+        if k == me:
+            continue
+        target, port = ssh_target(k) if k in aliases else (h.get("ip") or k, 22)
+        tcp = tcp_open(target, port)
+        if h.get("kind") == "fortigate":
+            login = "n/a (FortiOS)"
+        elif k not in aliases:
+            login = "no ssh alias"
+        elif not tcp:
+            login = "—"
+        else:
+            r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", k, "true"],
+                               stdin=subprocess.DEVNULL, capture_output=True, timeout=20)
+            login = "ok" if r.returncode == 0 else "no key login"
+        rows.append((k, f"{target}:{port}", "yes" if k in declared else "no", "open" if tcp else "closed", login))
+        if k in declared and not tcp:
+            notes.append(f"{k}: listed in reaches, but {target}:{port} is closed from here")
+        if k not in declared and tcp and login == "ok":
+            notes.append(f"{k}: key login works but it is not in reaches")
+    print(f"probe from {me} ({socket.gethostname()})")
+    print(f"{'host':18} {'target':22} {'in reaches':10} {'port':7} login")
+    for r in rows:
+        print(f"{r[0]:18} {r[1]:22} {r[2]:10} {r[3]:7} {r[4]}")
+    for n in notes:
+        print(f"!! {n}")
+
+
+def render_host_md(me: str, data: dict, source: str, skills=()) -> str:
     hosts, tasks = data["hosts"], data.get("tasks", {})
     h = hosts[me]
     hm = h.get("hermes") or {}
@@ -117,15 +252,30 @@ def render_host_md(me: str, data: dict, source: str) -> str:
         "## Tasks that must run on THIS host",
         "",
     ]
-    here = [(t, v) for t, v in tasks.items() if v.get("host") == me]
+    routes = {t: route(me, hosts, candidates=task_hosts(v, hosts)) for t, v in tasks.items()}
+    here = [(t, v) for t, v in tasks.items() if routes[t][0] == "here"]
     lines += [f"- `{t}` — {v.get('why', '')}" for t, v in here] or ["- none"]
     lines += ["", "## Tasks that must run elsewhere", "",
               "Run them with `ssh <alias> '<command>'` (alias = host name below; credentials come from",
               "`SSH_<NAME>_*` in `.env` through `~/.ssh/config.d/hermes_hosts`). Do not copy credentials",
               "or data back to this host; report a summary and the remote path. Say on which host each command ran.",
-              "", "| task | host | why |", "|---|---|---|"]
-    away = [(t, v) for t, v in tasks.items() if v.get("host") != me]
-    lines += [f"| `{t}` | {v.get('host')} | {v.get('why', '')} |" for t, v in away] or ["| — | — | — |"]
+              "",
+              "Delegate commands, not agents: you stay in charge here, run each command over ssh and read its",
+              "output here. A write (trigger, migration, delete, restart, config change) is approved by the user",
+              "here before the ssh call; never start an unattended agent (`claude -p`, `hermes -z`, `opencode run`)",
+              "on the other host to do it.",
+              "", "| task | needs | run it with | why |", "|---|---|---|---|"]
+    away = [(t, v) for t, v in tasks.items() if routes[t][0] != "here"]
+    lines += [f"| `{t}` | {v.get('needs') or 'host ' + str(v.get('host'))} | {fmt_route(*routes[t])} | {v.get('why', '')} |"
+              for t, v in away] or ["| — | — | — | — |"]
+    if skills:
+        lines += ["", "## Skills and where their work runs", "",
+                  "Each skill's `metadata.requires` (capabilities) matched against the hosts. `here` = run it on this",
+                  "host; `ssh <alias>` = run that part's commands on that host, under the rules above.",
+                  "", "| skill | needs → run it with |", "|---|---|"]
+        for name, reqs in skills:
+            cells = "; ".join(f"{r} → {fmt_route(*route(me, hosts, need=r))}" for r in reqs)
+            lines.append(f"| `{name}` | {cells} |")
     lines += ["", "## Hosts reachable from here", "", "| alias | ip | kind / os | folders | capabilities |", "|---|---|---|---|---|"]
     for r in h.get("reaches", []):
         o = hosts.get(r, {})
@@ -137,7 +287,8 @@ def render_host_md(me: str, data: dict, source: str) -> str:
     if fg:
         lines += ["", f"FortiGate devices ({', '.join(fg)}): FortiOS CLI over ssh, not Linux. Read-only "
                       "(`get`, `show`, `diagnose`) unless the task explicitly approves a `config` change."]
-    lines += ["", f"_Rendered by hermes_installer from config/hosts.yaml; edit that file, not this one._", ""]
+    lines += ["", "_Rendered by hermes_installer from config/hosts.yaml (and the skills' metadata.requires); edit those,"
+                  " not this file, then re-render: `./install.sh` (Hermes) or `make host` (cc_skills)._", ""]
     return "\n".join(lines)
 
 
@@ -229,6 +380,12 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="print what would be written, write nothing")
     ap.add_argument("--no-env", action="store_true", help="do not write HERMES_HOST into HERMES_HOME/.env")
     ap.add_argument("--write-ssh-config", action="store_true", help="also write ~/.ssh/config.d/hermes_hosts from .env")
+    ap.add_argument("--skills-dir", action="append", default=[],
+                    help="directory of <skill>/SKILL.md whose metadata.requires go into HOST.md (repeatable)")
+    ap.add_argument("--host-md", metavar="PATH",
+                    help="write only HOST.md to PATH (Claude Code, opencode): no SOUL.md, .env or ssh config")
+    ap.add_argument("--where", metavar="NEED", help="resolve one capability or task name from this host and exit")
+    ap.add_argument("--probe", action="store_true", help="measure tcp/ssh reach from this host vs `reaches`; writes nothing")
     args = ap.parse_args()
 
     data = load_yaml(Path(args.hosts).read_text())
@@ -236,16 +393,49 @@ def main() -> None:
     if not hosts:
         sys.exit(f"!! no hosts in {args.hosts}")
     for t, v in (data.get("tasks") or {}).items():
-        if v.get("host") not in hosts:
-            sys.exit(f"!! task {t} points at unknown host {v.get('host')}")
+        if v.get("host"):
+            if v["host"] not in hosts:
+                sys.exit(f"!! task {t} points at unknown host {v['host']}")
+        elif v.get("needs"):
+            if not task_hosts(v, hosts):
+                print(f"!! warning: task {t} needs '{v['needs']}' but no host has that capability", file=sys.stderr)
+        else:
+            sys.exit(f"!! task {t} has neither `host` nor `needs`")
     hermes_home = Path(args.hermes_home).expanduser()
 
-    me, source = resolve(args, hosts, hermes_home)
+    try:
+        me, source = resolve(args, hosts, hermes_home)
+    except SystemExit as unresolved:
+        if args.host_md and not args.dry_run:   # fail closed: the runtime still loads a HOST.md, and it says "no identity"
+            out = Path(args.host_md).expanduser()
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(unknown_host_md(args.hosts, hosts))
+            print(f"wrote fail-closed {out}", file=sys.stderr)
+        raise unresolved
     print(f"host: {me}  (from {source})")
     if args.check:
         return
+    if args.probe:
+        probe(me, hosts)
+        return
+    if args.where:
+        task = (data.get("tasks") or {}).get(args.where)
+        kind, where = route(me, hosts, candidates=task_hosts(task, hosts)) if task else route(me, hosts, need=args.where)
+        print(f"{args.where}: {kind}" + ("" if kind == "here" else f" {' '.join(where) or '-'}"))
+        sys.exit(0 if kind != "none" else 2)
 
-    host_md = render_host_md(me, data, source)
+    skills = skill_requirements(args.skills_dir)
+    host_md = render_host_md(me, data, source, skills)
+    if args.host_md:
+        out = Path(args.host_md).expanduser()
+        if args.dry_run:
+            print(f"\n--- {out} ---\n{host_md}")
+            return
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(host_md)
+        print(f"wrote {out}" + (f" ({len(skills)} skills with metadata.requires)" if args.skills_dir else ""))
+        return
+
     soul = upsert_soul(hermes_home / "SOUL.md", soul_block(me, hosts[me], hermes_home))
     env = None if args.no_env else upsert_env(hermes_home / ".env", me)
 

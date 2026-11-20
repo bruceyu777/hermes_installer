@@ -186,6 +186,8 @@ deploy_host() {
   say "Host -> $HERMES_HOME/HOST.md, SOUL.md block, ssh aliases (config/hosts.yaml)"
   local args=(--hosts "$HOSTS_FILE" --hermes-home "$HERMES_HOME" --tokens-file "$TOKENS_FILE" --write-ssh-config)
   [ -n "$HOST_NAME" ] && args+=(--host "$HOST_NAME")
+  # skills' metadata.requires -> "where each skill's work runs" in HOST.md (the shared cc_skills repo, if cloned here)
+  [ -d "$HOME/git/cc_skills" ] && args+=(--skills-dir "$HOME/git/cc_skills")
   "$HERMES_PYTHON" "$REPO_DIR/scripts/render_host_context.py" "${args[@]}" 2>&1 | sed 's/^/    /'
   mkdir -p "$HERMES_HOME/skills/$HOST_SKILL"
   cp -f "$REPO_DIR/config/skills/$HOST_SKILL/SKILL.md" "$HERMES_HOME/skills/$HOST_SKILL/"
