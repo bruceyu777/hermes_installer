@@ -29,6 +29,9 @@ ASK_FIRST_TOOLS = {
     "mcp__mantis_tools__send_email": "send an email",
     "mcp__jenkins__triggerBuild": "start a Jenkins build",
     "mcp__jenkins__rebuildBuild": "re-run a Jenkins build",
+    "mcp__logintel_testbed__testbed_book_node": "book a lab node in the user's name",
+    "mcp__logintel_testbed__testbed_release_booking": "end a booking and give the lab node back",
+    "mcp__logintel_testbed__testbed_extend_booking": "keep a booked lab node for more days",
 }
 
 # (pattern on the shell command or code text, what the command does)

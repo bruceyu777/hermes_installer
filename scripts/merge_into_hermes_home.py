@@ -38,6 +38,7 @@ ENV_NAME_OF_TOKEN = {
     "MANTIS_MCP_TOKEN": "MANTIS_MCP_TOKEN",
     "JENKINS_MCP_TOKEN": "JENKINS_MCP_BASIC",
     "LOGINTEL_MCP_KEY": "LOGINTEL_MCP_KEY",
+    "LOGINTEL_TESTBED_TOKEN": "LOGINTEL_TESTBED_TOKEN",
     "IMAGE_SERVER_MCP_API_KEY": "IMAGE_SERVER_MCP_API_KEY",
     # Telegram bot (optional): read by `hermes gateway`, not by config.yaml.
     "TELEGRAM_BOT_TOKEN": "TELEGRAM_BOT_TOKEN",
@@ -51,7 +52,7 @@ PASSTHROUGH_TOKEN = re.compile(r"^(HERMES_HOST|SSH_\w+|RDP_\w+|FGT\w*_(GUI_URL|R
 
 # MCP server -> the .env name its Authorization header needs. OAuth servers are on when
 # `hermes mcp login <server>` has stored a token under mcp-tokens/.
-TOKEN_OF_MCP_SERVER = {"logintel": "LOGINTEL_MCP_KEY", "mantis-tools": "MANTIS_MCP_TOKEN", "jenkins": "JENKINS_MCP_BASIC",
+TOKEN_OF_MCP_SERVER = {"logintel": "LOGINTEL_MCP_KEY", "logintel-testbed": "LOGINTEL_TESTBED_TOKEN", "mantis-tools": "MANTIS_MCP_TOKEN", "jenkins": "JENKINS_MCP_BASIC",
                        "image-builds": "IMAGE_SERVER_MCP_API_KEY"}
 OAUTH_MCP_SERVERS = ("microsoft365",)
 ENV_REFERENCE = re.compile(r"^\$\{(\w+)\}$")

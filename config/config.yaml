@@ -55,6 +55,13 @@ mcp_servers:
     tools:
       resources: false
       prompts: false
+  logintel-testbed:
+    url: https://releaseqa-logintelligence.corp.fortinet.com/mcp/testbed
+    headers:
+      Authorization: Bearer ${LOGINTEL_TESTBED_TOKEN}
+    tools:
+      resources: false
+      prompts: false
   mantis-tools:
     url: https://releaseqa-portal.corp.fortinet.com/sse
     transport: sse
