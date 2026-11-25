@@ -111,11 +111,29 @@ telegram_token() {   # the bot token in $HERMES_HOME/.env, empty if none
   printf '%s' "$value"
 }
 
-guard_shared_node() {   # refuse to install while a test is running here
-  if pgrep -f 'autotest\.py' >/dev/null 2>&1 || [ -e /run/lock/fortistack-node.lock ]; then
-    echo "a test is running on this node (autotest.py / fortistack-node.lock); install Hermes between builds" >&2
+# The node lock is a flock(2) on this file (openstack-kvm: Makefile, common/node_lock.py). The FILE stays
+# until the next reboot (2026-11-25: there on 93 of 110 nodes, held on none), so only a HELD lock counts.
+NODE_LOCK_FILE="/run/lock/fortistack-node.lock"
+
+node_lock_state() {   # prints free, held or unknown
+  [ -e "$NODE_LOCK_FILE" ] || { echo free; return 0; }
+  local rc=0
+  # Opened read-only, without O_CREAT: `flock FILE` creates, and /run/lock refuses that for another user's
+  # file (fs.protected_regular=2). A shared lock for an instant: it fails only while a job holds the lock.
+  ( exec 9<"$NODE_LOCK_FILE" && flock -n -s -E 75 9 ) 2>/dev/null || rc=$?
+  case $rc in 0) echo free ;; 75) echo held ;; *) echo unknown ;; esac
+}
+
+guard_shared_node() {   # refuse to install while a test or a node job is running here
+  if pgrep -f 'autotest\.py' >/dev/null 2>&1; then
+    echo "a test is running on this node (autotest.py); install Hermes between builds" >&2
     exit 1
   fi
+  case "$(node_lock_state)" in
+    free) ;;
+    held) echo "a job holds the node lock ($NODE_LOCK_FILE); install Hermes between builds" >&2; exit 1 ;;
+    *)    echo "cannot tell whether $NODE_LOCK_FILE is held (not readable, or no flock); not installing" >&2; exit 1 ;;
+  esac
 }
 
 preinstall_system_packages() {   # so the official installer finds them and skips its own apt calls

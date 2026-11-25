@@ -19,7 +19,8 @@ Hermes 安装在你的主目录中，不需要 sudo。如果你**有**免密码 
 
 **在共享测试节点（nodeNN）上：** 一次 `apt install` 会让 Ubuntu 的 `needrestart` 重启所有使用了被替换库的服务——
 包括 Jenkins agent，从而杀掉节点上正在运行的测试（2026-09-23 因此有两条 pipeline 挂起了 48 小时）。
-所以 `install.sh` 在 `autotest.py` 正在运行或存在 `/run/lock/fortistack-node.lock` 时会拒绝运行，
+所以 `install.sh` 在 `autotest.py` 正在运行，或有任务持有节点锁（对 `/run/lock/fortistack-node.lock` 的 `flock`；
+仅有该文件不算，它会一直留到下次重启）时会拒绝安装 Hermes，
 并且会先用 `NEEDRESTART_MODE=l`（只列出、不重启）预装这两个包，让官方安装脚本不再自己调用 `apt`。
 请在两次构建之间安装。
 

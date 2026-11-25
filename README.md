@@ -21,8 +21,9 @@ without sudo it just skips them.
 
 **On a shared test node (nodeNN):** an `apt install` makes Ubuntu's `needrestart` restart every
 service with a replaced library — including the Jenkins agent, which kills the test running on the
-node (this hung two pipelines for 48 h on 2026-09-23). `install.sh` therefore refuses to run while
-`autotest.py` is running or `/run/lock/fortistack-node.lock` exists, and pre-installs those two
+node (this hung two pipelines for 48 h on 2026-09-23). `install.sh` therefore refuses to install Hermes while
+`autotest.py` is running or a job holds the node lock (`flock` on `/run/lock/fortistack-node.lock`; the file
+alone means nothing, it stays until the next reboot), and pre-installs those two
 packages with `NEEDRESTART_MODE=l` (list only) so the official installer never calls `apt` itself.
 Install between builds.
 
@@ -68,6 +69,8 @@ machine is and `SSH_<NAME>_*` / `RDP_<NAME>_*` hold the logins. `install.sh` the
 `ssh <alias>`. Role profiles: `hermes profile create qa --no-skills --description '...'`, then
 `./install.sh --profile qa` applies the shared config plus `config/profiles/qa/` (SOUL.md,
 overlay.yaml, local skills). Design: `hermes_custom_project/hermes_multi_agent_architecture_v2.1_qa.md`.
+Shared lab nodes have no entry of their own: the `lab_nodes` class names `all-in-one-node16` `node16`, without ssh
+aliases and without touching the shared `~/.ssh`. Offline test of that and of the node lock: `tests/lab_node_test.sh`.
 
 Check again any time with `./install.sh --check`. The full acceptance suite (real calls, a few
 minutes) is `tests/acceptance.sh`. Update later with `git pull && ./install.sh`; your tokens

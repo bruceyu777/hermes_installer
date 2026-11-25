@@ -15,6 +15,8 @@ With --write-ssh-config also:
 Resolution order for the host name (first hit wins):
   --host NAME  >  $HERMES_HOST  >  HERMES_HOST in HERMES_HOME/.env  >  HERMES_HOST in --tokens-file
   >  auto-detect: `hostname` equals a host's `hostname`, or one of `hostname -I` equals a host's `ip`.
+A shared lab node has no entry of its own: the `lab_nodes` class of hosts.yaml gives all-in-one-node16 the name
+node16 (also valid for --host / HERMES_HOST, on that machine only), without ssh aliases and without touching ~/.ssh.
 A configured name that disagrees with auto-detection is used, with a warning (a tokens.env copied
 from another machine is the usual cause).
 
@@ -37,6 +39,7 @@ Usage:
   scripts/render_host_context.py --probe               # measure tcp/ssh reach from here vs `reaches`; writes nothing
 """
 import argparse
+import ipaddress
 import os
 import re
 import socket
@@ -84,6 +87,24 @@ def autodetect(hosts: dict) -> str:
         if h.get("ip") in ips:
             return key
     return ""
+
+
+def add_lab_node(data: dict) -> None:
+    """On a shared lab node (hosts.yaml `lab_nodes`), add this machine to data["hosts"]; `lab_node: True` marks it."""
+    hosts, cls = data["hosts"], dict(data.get("lab_nodes") or {})
+    prefix, name_prefix = cls.pop("hostname_prefix", ""), cls.pop("name_prefix", "")
+    hostname = socket.gethostname()
+    m = re.fullmatch(re.escape(prefix) + r"(\d+)", hostname, flags=re.I) if prefix and name_prefix else None
+    if not m or autodetect(hosts) or name_prefix + m.group(1) in hosts:   # an entry of its own comes first
+        return
+    ips = local_ips()   # docker and libvirt bridges are in there too: take the one in the lab network
+    cidr = ((data.get("networks") or {}).get(cls.get("network")) or {}).get("cidr")
+    lab_ips = [ip for ip in ips if cidr and "." in ip and ipaddress.ip_address(ip) in ipaddress.ip_network(cidr)]
+    cls.update(hostname=hostname, lab_node=True)
+    ip = next(iter(lab_ips + ips), "")
+    if ip:
+        cls["ip"] = ip
+    hosts[name_prefix + m.group(1)] = cls
 
 
 def resolve(args, hosts: dict, hermes_home: Path) -> tuple:
@@ -389,7 +410,7 @@ def main() -> None:
     args = ap.parse_args()
 
     data = load_yaml(Path(args.hosts).read_text())
-    hosts = data.get("hosts") or {}
+    hosts = data.get("hosts") or {}   # the same dict as data["hosts"]: add_lab_node adds to it
     if not hosts:
         sys.exit(f"!! no hosts in {args.hosts}")
     for t, v in (data.get("tasks") or {}).items():
@@ -402,6 +423,7 @@ def main() -> None:
         else:
             sys.exit(f"!! task {t} has neither `host` nor `needs`")
     hermes_home = Path(args.hermes_home).expanduser()
+    add_lab_node(data)
 
     try:
         me, source = resolve(args, hosts, hermes_home)
@@ -436,6 +458,9 @@ def main() -> None:
         print(f"wrote {out}" + (f" ({len(skills)} skills with metadata.requires)" if args.skills_dir else ""))
         return
 
+    if args.write_ssh_config and hosts[me].get("lab_node"):
+        args.write_ssh_config = False
+        print("ssh aliases: none on a shared lab node (~/.ssh is everybody's, left alone)")
     soul = upsert_soul(hermes_home / "SOUL.md", soul_block(me, hosts[me], hermes_home))
     env = None if args.no_env else upsert_env(hermes_home / ".env", me)
 

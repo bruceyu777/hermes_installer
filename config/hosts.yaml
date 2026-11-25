@@ -170,6 +170,22 @@ hosts:
     capabilities: [fortios-cli, fortios-gui, fortios-rest]
     reaches: []
 
+# Shared lab nodes are a class, not entries: nobody routes work to them and no ssh alias is written for or on them.
+# A machine whose hostname is hostname_prefix + a number becomes host name_prefix + that number (all-in-one-node16 -> node16)
+# with the facts below; only the machine itself gets this, on itself. An entry under hosts (by hostname or ip) comes first:
+# all-in-one-node254 stays log_intel_server. Checked 2026-11-25: all 110 nodes have this hostname form.
+lab_nodes:
+  hostname_prefix: all-in-one-node
+  name_prefix: node
+  description: "FortiStack all-in-one lab node; shared login, pipelines run here"
+  network: fortistackrobot
+  kind: server
+  os: ubuntu
+  hermes: { installed: true, profiles: [default], gateway: false }
+  folders: { home: /home/fosqa, autolibv3: /home/fosqa/autolibv3 }
+  capabilities: [fos-ai-gateway]
+  reaches: []
+
 # Tasks bound to a host or a capability. An agent on any other host runs the commands there over ssh
 # (via the alias); it must not copy the credentials or the data to itself.
 #   host: <name>         only that host (identity-bound: a bot token, the repo of record, a device)
