@@ -40,6 +40,12 @@ ASK_FIRST_COMMANDS = (
     (re.compile(r"oriole_failed\.py[\s\S]*\bpost\b"), "send failed test results to Oriole"),
     (re.compile(r"\bbash\s+-s\s+post\b"), "send failed test results to Oriole from a lab node"),
     (re.compile(r"oriole_resubmit\.py"), "send test results to Oriole"),
+    # skill testcase-git-merge-request: "send" pushes and opens a merge request; "send ... --dry-run" does not.
+    # The second pattern catches the script called through a variable.
+    (re.compile(r"testcase_change\.py[\s\S]*?\bsend\b(?!(?:[^\n;&|]|\\\n)*--dry-run)"),
+     "push a test case change to GitLab and open a merge request"),
+    (re.compile(r"\bsend\b(?=[\s\S]*--source-branch)(?!(?:[^\n;&|]|\\\n)*--dry-run)"),
+     "push a test case change to GitLab and open a merge request"),
 )
 SHELL_TOOL_TEXT_ARGUMENT = {"terminal": "command", "execute_code": "code"}
 
